@@ -1,5 +1,5 @@
 {
-  "baseUrl": "http://192.168.3.133:8095",
+  "baseUrl": "LOCALHOST",
   "model": "deepseek-v4.1-flash",
   "startedAt": "2026-09-20T00:19:14+0800",
   "profile": "temperature=0, ignore_eos=true, warmup discarded; no technical/open-prose/code content benchmark",

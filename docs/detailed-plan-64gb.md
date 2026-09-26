@@ -39,22 +39,22 @@
 
 ```bash
 # P0-1 磁盘余量 ≥ 340GiB
-ssh hym@192.168.3.133 'df -h / | awk "NR==2{print \$4}"'
+ssh SERVER 'df -h / | awk "NR==2{print \$4}"'
 # 预期:≥ 500G(当前 522G)
 
 # P0-2 Gen2 状态(Engram 的 UVA/D2H 依赖链路带宽)
-ssh hym@192.168.3.133 'cat /sys/bus/pci/devices/0000:03:00.0/current_link_speed'
+ssh SERVER 'cat /sys/bus/pci/devices/0000:03:00.0/current_link_speed'
 # 预期:5.0 GT/s PCIe(四卡都要)
 
 # P0-3 0731 健康且会话内无任务(切换时机由你定)
-ssh hym@192.168.3.133 'curl -s -o /dev/null -w "%{http_code}" http://192.168.3.133:8000/health'
+ssh SERVER 'curl -s -o /dev/null -w "%{http_code}" http://SERVER:8000/health'
 # 预期:200
 
 # P0-4 docker 可用 + 剩余镜像空间
-ssh hym@192.168.3.133 'docker system df | head -2'
+ssh SERVER 'docker system df | head -2'
 
 # P0-5 CPU/内存基线记录(留档对比)
-ssh hym@192.168.3.133 'free -g | head -2; uptime'
+ssh SERVER 'free -g | head -2; uptime'
 
 # P0-6 (到时执行)下载服务器连通性
 curl -sI --max-time 10 https://huggingface.co | head -1
@@ -216,7 +216,7 @@ docker logs -f dsv41-pp4 2>&1 | grep -E "Engram layer|served from SSD|Engine|err
 
 ```bash
 git clone https://github.com/kaka86mm/dsv41-flash-pp4-170hx.git ~/v41-bench
-cd ~/v41-bench && python3 bench/accept.py --base-url http://192.168.3.133:8095 \
+cd ~/v41-bench && python3 bench/accept.py --base-url http://SERVER:8095 \
   --model deepseek-v4.1-flash
 ```
 

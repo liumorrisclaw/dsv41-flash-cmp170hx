@@ -1,5 +1,5 @@
 {
-  "baseUrl": "http://192.168.3.133:8000",
+  "baseUrl": "LOCALHOST",
   "model": "DeepSeek-V4-Flash-0731",
   "targets": [
     32768

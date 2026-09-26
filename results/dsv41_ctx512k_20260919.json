@@ -1,5 +1,5 @@
 {
-  "baseUrl": "http://192.168.3.133:8095",
+  "baseUrl": "LOCALHOST",
   "model": "deepseek-v4.1-flash",
   "targets": [
     524288
