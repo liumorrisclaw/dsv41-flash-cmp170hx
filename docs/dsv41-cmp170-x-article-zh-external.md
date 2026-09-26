@@ -8,7 +8,13 @@
 
 prefill 3,355 tok/s,decode 35.5 tok/s,原生视觉,1M 上下文实测通过。
 
-假期抽空把整个测试报告整理了出来,以下是完整数据。
+为什么要做这件事？说实话，输出效率不会高——62GB 内存跑 764B 模型，Engram 查表走 SATA，prefill 和 decode 都会被硬件卡死。这不是一个追求性能的项目。
+
+我真正想知道的是：**在硬件严重受限的条件下，有哪些优化思路可以撑起一个"不可能"的部署？** 189GB 的检索表能不能当数据库用而不是当权重加载？62GB 内存里的页缓存能不能扛住一个 189GB 表的查询压力？SATA 的随机读够不够喂一个 764B 的 Engram 门控？
+
+这些问题没有现成答案——社区已有方案要么依赖 373GB 内存，要么依赖 NVMe，都跳过了硬件受限这个场景。我把整个过程和踩过的坑写出来，希望能给做类似优化的人多一些参考。
+
+假期抽空把整个测试报告整理了出来，以下是完整数据。
 
 # 2. 为什么这事以前没人做成
 
@@ -34,9 +40,9 @@ V4.1-Flash 的 Engram 是个 189GB 的 n-gram 检索表——不是矩阵,不能
 
 # 4. 实际部署(9月18日晚间)
 
-权重下载和 docker 镜像拉取都是体力活——换镜像源、调并发、等断点续传，不展开。真正有技术含量的是两件事：**首启五关**和**减少磁盘读取**。
+权重下载和 docker 镜像拉取都是体力活——换镜像源、调并发、等断点续传，不展开。真正有技术含量的是两件事：**首启四关**和**减少磁盘读取**。
 
-## 首启五关
+## 首启四关
 
 **第一关，overlay 挂载。** zebgop 的 overlay 有 54 个 .py 文件，覆盖了 vLLM 的注意力、Engram、DSpark、权重加载器等核心模块。最初我尝试用 PYTHONPATH 让 Python 优先加载 overlay 目录——结果只对顶层包生效，vLLM 内部的子模块导入（`from vllm.models.deepseek_v4_1.common.engram import ...`）仍然指向镜像内的原版文件。解法是逐文件 bind-mount：遍历 overlay/vllm/ 下的每一个 .py，分别 mount 到镜像内 vllm 包的对应路径上（共 108 个文件）。这样 Python 的 import 机制天然命中 overlay 版本，零侵入。
 
@@ -45,8 +51,6 @@ V4.1-Flash 的 Engram 是个 189GB 的 n-gram 检索表——不是矩阵,不能
 **第三关，Engram 跳过正则。** 即使 mmap 允许了，也不该真的把 189GB 表读进内存。overlay 提供了 `DSV41_SKIP_WEIGHT_RE` 环境变量——一个正则，匹配到的权重名会被加载器在 open 文件之前就跳过。正确值是 `layers\.(1|14)\.engram\.embed\.`（Engram 只挂在第 1 和第 14 层）。这个正则在 shell 嵌套里转义写错了三次才搞对。
 
 **第四关，DSpark 草稿模型不支持 PP4。** vLLM 原版对 speculative decoding + pipeline parallelism 的组合有硬编码检查（要求草稿模型实现 SupportsPP 接口），而 DSpark 的草稿不是流水线化的——它整体住在最后一个 rank 上。overlay 的 speculative.py 补丁加了一段旁路：当 method=dspark 且 pipeline_parallel_size>1 时，强制把 draft_parallel_config.pipeline_parallel_size 设为 1。这段代码必须通过逐文件挂载才能生效。
-
-**第五关，一个空行截断了 docker run 的续行符。** 最蠢的一关。之前删除 ENGRAM_ZERO 环境变量时在 docker run 命令里留了一个空行，bash 的 `\` 续行遇到空行就断了，后面所有参数被当成独立命令。查了 15 分钟。
 
 ## 减少磁盘读取
 
@@ -60,9 +64,7 @@ V4.1-Flash 的 Engram 是个 189GB 的 n-gram 检索表——不是矩阵,不能
 
 **自适应守护进程（正在运行）。** 每 60 秒检测盘读活动，有查询就自动 fadvise(WILLNEED) 头部 15GB×2 分片，防止 LRU 把热页冲出去。后续计划用 row_store_stats() 积累真实命中分布（哪些行号被读最多），定向预载最热页，比"猜头部"更精准。
 
-三层叠加后，自然语言场景的 Engram 查询几乎全部命中页缓存，SATA 的随机读带宽不再是 decode 的瓶颈——prefill 仍然受限（每 token 31-40KB 盘读），但这可以通过热区预载扩大覆盖来缓解。如果未来加一块 NVMe（Gen3×4，随机读 8 倍），这个瓶颈就彻底消失了。
-
-三层叠加后，自然语言场景的 Engram 查询几乎全部命中页缓存，SATA 的随机读带宽不再是 decode 的瓶颈——prefill 仍然受限（每 token 31-40KB 盘读），但这可以通过热区预载扩大覆盖来缓解。
+三层叠加后，自然语言场景的 Engram 查询几乎全部命中页缓存，SATA 的随机读带宽不再是 decode 的瓶颈——prefill 仍然受限（每 token 31-40KB 盘读），但这可以通过热区预载扩大覆盖来缓解。如果把 SATA 换成一块 NVMe（Gen3×4，随机读约 8 倍），prefill 预计从 ~1,800 提升到 ~4,000 tok/s（接近 0731 的全显存水平），同时保留 SSD-Engram 的零内存占用优势。
 
 # 5. 实测数据(9月19日~20日)
 
