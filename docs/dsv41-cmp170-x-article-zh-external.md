@@ -108,7 +108,7 @@ prefill 全档位压双 Spark(1.5-3.4×),decode 主力场景 1.7× 领先。对 
 
 社区也有人整理了 GLM-5.3-Flash 在 4× CMP 170HX 上的部署配方:[Morrowmake/glm53-flash-cmp170hx-recipe](https://github.com/Morrowmake/glm53-flash-cmp170hx-recipe) — 后续实测后会跟 DSV41 的数据做一轮横向对比,看两个模型在同套硬件上各自的定位。
 
-# 7. 致谢
+# 7. 致谢与开源
 
 [zebgop-ops/dsv41reap-pp](https://github.com/zebgop-ops/dsv41reap-pp) — SSD-Engram 机制与完整 vLLM overlay
 
@@ -122,4 +122,6 @@ prefill 全档位压双 Spark(1.5-3.4×),decode 主力场景 1.7× 领先。对 
 
 [sfxnz/DeepSeek-V4.1-Flash-EXL3](https://huggingface.co/sfxnz/DeepSeek-V4.1-Flash-EXL3/tree/2.0bpw-mcg) — 2.0bpw 权重包
 
-Gen2 修复套件开源:[cmp170hx-gen2-window-fix](https://github.com/liumorrisclaw/cmp170hx-gen2-window-fix)
+完整部署方案、测试数据和脚本已开源:[dsv41-flash-cmp170hx](https://github.com/liumorrisclaw/dsv41-flash-cmp170hx)
+
+Gen2 修复套件:[cmp170hx-gen2-window-fix](https://github.com/liumorrisclaw/cmp170hx-gen2-window-fix)
