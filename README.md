@@ -1,6 +1,6 @@
 # DeepSeek V4.1-Flash on 4× CMP 170HX — 62GB RAM, SATA, zero new hardware
 
-**Global first**: Full 764B DeepSeek V4.1-Flash (with 189GB Engram retrieval tables, vision, DSpark speculation) running on 4× CMP 170HX mining cards with **62GB host RAM and a SATA SSD** — no added RAM, no NVMe, no hardware changes.
+**Full 764B DeepSeek V4.1-Flash (with 189GB Engram retrieval tables, vision, DSpark speculation) running on 4× CMP 170HX mining cards with **62GB host RAM and a SATA SSD** — no added RAM, no NVMe, no hardware changes.
 
 The trick: treat the 189GB Engram n-gram retrieval table as a **database, not a weight**. Keep it on disk, query it on demand via `pread` through the Linux page cache (~40GB of RAM acting as LRU), and never load it into memory.
 
