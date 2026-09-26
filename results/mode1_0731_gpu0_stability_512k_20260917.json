@@ -1,0 +1,34 @@
+{
+  "baseUrl": "http://192.168.3.133:8000",
+  "model": "DeepSeek-V4-Flash-0731",
+  "targets": [
+    524288
+  ],
+  "rounds": 1,
+  "maxTokens": 32,
+  "profile": "temperature=0, ignore_eos=true, streaming usage, warmup discarded",
+  "abortedAfterError": false,
+  "warmupError": null,
+  "results": [
+    {
+      "targetContextTokens": 524288,
+      "round": 1,
+      "maxTokens": 32,
+      "promptTokens": 524288,
+      "completionTokens": 32,
+      "ttftSeconds": 171.457,
+      "prefillTokensPerSecond": 3057.83,
+      "decodeTokensPerSecond": 44.24,
+      "wallSeconds": 172.158,
+      "complete": true,
+      "validity": "PASS"
+    }
+  ],
+  "telemetry": {
+    "samples": 0,
+    "maxTemperatureC": {},
+    "maxPowerW": {},
+    "maxUtilizationPct": {},
+    "maxMemoryMiB": {}
+  }
+}

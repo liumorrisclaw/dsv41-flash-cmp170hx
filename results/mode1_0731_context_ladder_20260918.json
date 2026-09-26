@@ -1,0 +1,90 @@
+{
+  "baseUrl": "http://192.168.3.133:8000",
+  "model": "DeepSeek-V4-Flash-0731",
+  "targets": [
+    32768,
+    65536,
+    131072,
+    262144,
+    524288
+  ],
+  "rounds": 1,
+  "maxTokens": 192,
+  "profile": "temperature=0, ignore_eos=true, streaming usage, warmup discarded",
+  "abortedAfterError": false,
+  "warmupError": null,
+  "results": [
+    {
+      "targetContextTokens": 32768,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 32768,
+      "completionTokens": 192,
+      "ttftSeconds": 6.806,
+      "prefillTokensPerSecond": 4814.23,
+      "decodeTokensPerSecond": 98.86,
+      "wallSeconds": 8.739,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 65536,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 65536,
+      "completionTokens": 192,
+      "ttftSeconds": 12.45,
+      "prefillTokensPerSecond": 5264.07,
+      "decodeTokensPerSecond": 113.13,
+      "wallSeconds": 14.138,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 131072,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 131072,
+      "completionTokens": 192,
+      "ttftSeconds": 26.69,
+      "prefillTokensPerSecond": 4910.91,
+      "decodeTokensPerSecond": 104.4,
+      "wallSeconds": 28.52,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 262144,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 262144,
+      "completionTokens": 192,
+      "ttftSeconds": 62.245,
+      "prefillTokensPerSecond": 4211.46,
+      "decodeTokensPerSecond": 96.26,
+      "wallSeconds": 64.23,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 524288,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 524288,
+      "completionTokens": 192,
+      "ttftSeconds": 161.458,
+      "prefillTokensPerSecond": 3247.21,
+      "decodeTokensPerSecond": 79.11,
+      "wallSeconds": 163.873,
+      "complete": true,
+      "validity": "PASS"
+    }
+  ],
+  "telemetry": {
+    "samples": 0,
+    "maxTemperatureC": {},
+    "maxPowerW": {},
+    "maxUtilizationPct": {},
+    "maxMemoryMiB": {}
+  }
+}

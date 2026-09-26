@@ -1,0 +1,84 @@
+{
+  "baseUrl": "http://192.168.3.133:8095",
+  "model": "deepseek-v4.1-flash",
+  "targets": [
+    32768,
+    65536,
+    131072,
+    262144,
+    524288
+  ],
+  "rounds": 1,
+  "maxTokens": 192,
+  "profile": "temperature=0, ignore_eos=true, streaming usage, warmup discarded",
+  "abortedAfterError": true,
+  "warmupError": null,
+  "results": [
+    {
+      "targetContextTokens": 32768,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 32768,
+      "completionTokens": 192,
+      "ttftSeconds": 52.663,
+      "prefillTokensPerSecond": 622.22,
+      "decodeTokensPerSecond": 31.26,
+      "wallSeconds": 58.773,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 65536,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 65536,
+      "completionTokens": 192,
+      "ttftSeconds": 55.875,
+      "prefillTokensPerSecond": 1172.9,
+      "decodeTokensPerSecond": 35.24,
+      "wallSeconds": 61.295,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 131072,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 131072,
+      "completionTokens": 192,
+      "ttftSeconds": 85.977,
+      "prefillTokensPerSecond": 1524.49,
+      "decodeTokensPerSecond": 33.06,
+      "wallSeconds": 91.756,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 262144,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 262144,
+      "completionTokens": 192,
+      "ttftSeconds": 162.311,
+      "prefillTokensPerSecond": 1615.07,
+      "decodeTokensPerSecond": 23.39,
+      "wallSeconds": 170.478,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 524288,
+      "round": 1,
+      "maxTokens": 192,
+      "validity": "ERROR",
+      "error": "HTTPError: HTTP Error 400: Bad Request"
+    }
+  ],
+  "telemetry": {
+    "samples": 0,
+    "maxTemperatureC": {},
+    "maxPowerW": {},
+    "maxUtilizationPct": {},
+    "maxMemoryMiB": {}
+  }
+}

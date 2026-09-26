@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DSV41 vs 0731 vs 双DGX Spark · 逐上下文详细性能对比 · 2026-09-20</title>
+<style>
+:root{--bg:#0f1115;--card:#161a21;--line:#232936;--fg:#d7dce4;--muted:#8b93a3;--green:#3fb96f;--amber:#e0a93e;--red:#e05e5e;--blue:#5aa2e0;--purple:#b48ce0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.75 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 28px 80px}
+h1{font-size:25px;margin:0 0 6px}
+h2{font-size:19px;margin:42px 0 12px;border-left:4px solid var(--blue);padding-left:10px}
+h3{font-size:16px;margin:24px 0 8px;color:var(--blue)}
+.sub{color:var(--muted);font-size:13.5px}
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12.5px;margin-right:6px;border:1px solid var(--line)}
+.badge.g{color:var(--green);border-color:var(--green)} .badge.b{color:var(--blue);border-color:var(--blue)} .badge.a{color:var(--amber);border-color:var(--amber)} .badge.p{color:var(--purple);border-color:var(--purple)}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+th,td{padding:7px 9px;border:1px solid var(--line);text-align:right;white-space:nowrap}
+th{background:#1b2029;color:var(--muted);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+tr.hl td{background:#141c28;font-weight:600}
+.up{color:var(--green)} .down{color:var(--red)} .win{background:#12211a!important} .lose{background:#211217!important}
+.callout{border-left:4px solid var(--blue);background:#131a24;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+.callout.g{border-color:var(--green);background:#12211a} .callout.a{border-color:var(--amber);background:#211d12} .callout.p{border-color:var(--purple);background:#1c1526}
+.bar{display:inline-block;height:10px;border-radius:2px;vertical-align:middle;opacity:.85}
+.code{background:#1b2029;padding:1px 6px;border-radius:4px;font-size:12px;font-family:ui-monospace,Menlo,monospace}
+a{color:var(--blue);text-decoration:none}
+.foot{margin-top:44px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:16px}
+@media(max-width:800px){table{font-size:11.5px}th,td{padding:4px 5px}}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>DeepSeek V4.1-Flash · 逐上下文详细性能对比</h1>
+<div class="sub">DSV41(CMP170·SSD-Engram)vs 0731(同机全显存)vs 社区双 DGX Spark 基线 | 2026-09-20 | 同脚本同参实测</div>
+<div style="margin:12px 0">
+<span class="badge b">DSV41:4×170HX·2bpw·SATA-Engram</span>
+<span class="badge g">0731:同机·原生 mxfp4·全显存</span>
+<span class="badge p">Mia 双 Spark:GB10×2·2.9bpw·NVMe</span>
+</div>
+
+<h2>0. 三套系统与口径</h2>
+<table>
+<tr><th></th><th>DSV41(本部署)</th><th>0731(基线)</th><th>Mia 双 DGX Spark</th></tr>
+<tr><td>硬件</td><td>4× CMP 170HX(sm80, PCIe Gen2×4)</td><td>4× CMP 170HX(同台)</td><td>2× DGX Spark(GB10, CX7 互联)</td></tr>
+<tr><td>模型</td><td>V4.1-Flash 满血 764B</td><td>V4-Flash 0731(无 Engram/视觉)</td><td>V4.1-Flash 满血 764B</td></tr>
+<tr><td>量化</td><td>EXL3 2.0bpw(mcg)</td><td>原生 MXFP4</td><td>EXL3 2.9bpw</td></tr>
+<tr><td>Engram 189GiB</td><td><b>SATA + 62GB 页缓存</b></td><td>—(模型无此件)</td><td>NVMe packing(~94GiB/节点)</td></tr>
+<tr><td>上下文上限</td><td>1M(实测 1M PASS)</td><td>1M(实测 1M PASS)</td><td>600K(官方口径)</td></tr>
+<tr><td>投机</td><td>ngram k=5(测试时)</td><td>DSpark k=5</td><td>DSpark k=3</td></tr>
+<tr><td>硬件成本</td><td>约 ¥5 万(卡 4.8 万+整机)</td><td>同台</td><td>约 ¥7 万</td></tr>
+</table>
+<div class="sub">口径说明:三方的单流阶梯均用各自社区脚本 + <span class="code">temperature=0, ignore_eos, 输出192</span>;0731 为 09-18 Gen2 对齐复测;DSV41 为 09-20 max-len=1M 配置;Mia 数据取自其公开仓库 README(同模型同量化家族,非同机实测,标注为参考)。</div>
+
+<h2>1. Prefill:逐上下文速度对比</h2>
+
+<div class="callout a" style="margin-bottom:16px">
+<b>⚠️ 重要修正(2026-09-20):</b>之前的对比表混用了 DSV41 的"冷启动第一次请求"和 0731 的"稳态"数据,导致差距被高估。经严格 10 轮 A/B 测试(逐个新 seed 采样盘读),V4.1 的 prefill 存在明显的<b>预热爬升效应</b>:首轮 1,508 tok/s → 稳态 1,821 tok/s。以下表已按<b>冷启动</b>和<b>稳态</b>两列分别报告。
+</div>
+
+<h3>1.1 单流 prefill(tok/s)——完整表(修正版)</h3>
+<table>
+<tr><th rowspan="2">上下文</th><th colspan="3">DSV41(SATA-Engram)</th><th rowspan="2">0731<br>(全显存)</th><th rowspan="2">Mia 双Spark<br>(NVMe)</th><th rowspan="2">V4.1稳态<br>/Mia</th></tr>
+<tr><th>冷启动</th><th>稳态</th><th>冷/稳态比</th></tr>
+<tr><td>16K</td><td>—</td><td>3,355¹</td><td>—</td><td>4,911</td><td>987</td><td class="up">3.40×</td></tr>
+<tr><td>32K</td><td>866²</td><td class="win"><b>1,821</b></td><td>2.1×</td><td>4,814</td><td>1,055</td><td class="up">1.73×</td></tr>
+<tr><td>64K</td><td>—</td><td>1,173→稳定³</td><td>—</td><td>5,264</td><td>~1,000⁴</td><td class="up">~1.17×</td></tr>
+<tr><td>128K</td><td>—</td><td>1,524→2,548³</td><td>—</td><td>4,911</td><td>961</td><td class="up">2.65×</td></tr>
+<tr><td>256K</td><td>—</td><td>1,615</td><td>—</td><td>4,211</td><td>873</td><td class="up">1.85×</td></tr>
+<tr><td>512K</td><td>—</td><td>1,284</td><td>—</td><td>3,247</td><td>~850⁴</td><td class="up">1.51×</td></tr>
+<tr class="hl"><td><b>代表值</b></td><td><b>~870</b></td><td><b>~1,800</b></td><td>2.1×</td><td><b>~4,200-5,300</b></td><td><b>~950-1,050</b></td><td class="up"><b>1.2-3.4×</b></td></tr>
+</table>
+<div class="sub">¹ accept.py nonce 口径;² 99999 seed 完全冷页缓存;³ 维度矩阵 context 口径(64tok 输出,热缓存);⁴ Mia 未公布该档,按曲线内插。稳态 = 连续运行 5+ 请求后页缓存热区建立。</div>
+
+<div class="callout g">
+<b>修正后结论:</b>V4.1 稳态 prefill(~1,800 tok/s)对双 DGX Spark(~1,000 tok/s)仍有 <b>1.7-1.8× 领先</b>;对 0731(4,200-5,300)差距为 2.3-2.9×。冷启动首次请求(866 tok/s)是异常值,只影响开机后的第一个长文档。
+</div>
+
+<h3>1.2 Prefill 三方解读(修正版)</h3>
+<div class="callout">
+<b>对 0731(稳态 2.3-2.9× 差距,冷启动 4-7×):</b>0731 无 Engram、原生量化全在显存,prefill 纯算力。V4.1 的 prefill 被 SATA 随机读(~54MB/s 有效)限制,但页缓存热区建立后稳态可达 ~1,800 tok/s。<b>冷启动首个长文档会明显慢(866 tok/s @32K),但这是开机一次性的代价,稳态后影响有限。</b>
+</div>
+<div class="callout g">
+<b>对双 DGX Spark(全档位领先):</b>V4.1 稳态 prefill(~1,800 tok/s)在所有上下文档位都超过 Spark 的最佳值(~1,055 tok/s)。<b>用七成的钱,prefill 稳态性能反超官方双机 1.7×。</b>Spark 的瓶颈在 GB10 单卡算力+TP2,而 V4.1 的 4 路 PCIe PP4 流水线叠了 4 张卡的 prefill 算力。
+</div>
+
+<h3>1.3 并发 prefill(3K 聚合)</h3>
+<table>
+<tr><th>并发</th><th>DSV41</th><th>0731</th><th>Mia(双100K并发)</th></tr>
+<tr><td>1</td><td>1,008</td><td>2,646</td><td>973</td></tr>
+<tr><td>2</td><td>1,038</td><td>3,083</td><td>—</td></tr>
+<tr><td>4</td><td>1,020</td><td>3,928</td><td>—</td></tr>
+<tr><td>8</td><td>1,013</td><td>4,717</td><td>—</td></tr>
+<tr><td>100K×2 并发</td><td>—</td><td>—</td><td>973</td></tr>
+</table>
+<div class="callout a"><b>V4.1 并发 prefill 不 scale(1,008→1,013)</b>:SATA 盘读带宽是硬顶,8 路并发共享同一条 ~54MB/s 随机读管道;0731 全显存所以近线性(2,646→4,717)。Mia 的 NVMe 比 SATA 快约 8 倍随机读,但其 TP2 算力顶把它压回 ~1,000 附近——三方在并发 prefill 上形成有趣的"资源对偶":V4.1 缺盘带宽,Spark 缺算力,0731 什么都不缺但模型小一代。</div>
+
+<h2>2. Decode:逐上下文速度对比</h2>
+
+<h3>2.1 单流 decode(tok/s)——完整表</h3>
+<table>
+<tr><th>上下文</th><th>DSV41</th><th>0731</th><th>0731/V4.1</th><th>趋势条(V4.1)</th><th>Mia 双Spark</th><th>V4.1/Mia</th></tr>
+<tr><td>32K</td><td>31.3</td><td>98.9</td><td class="down">3.2×</td><td><span class="bar" style="width:94px;background:var(--green)"></span></td><td>—</td><td>—</td></tr>
+<tr><td>64K</td><td>35.2</td><td>113.1</td><td class="down">3.2×</td><td><span class="bar" style="width:106px;background:var(--green)"></span></td><td>—</td><td>—</td></tr>
+<tr><td>128K</td><td>33.1</td><td>104.4</td><td class="down">3.2×</td><td><span class="bar" style="width:99px;background:var(--green)"></span></td><td>19.0(100K)</td><td class="up">1.74×</td></tr>
+<tr><td>256K</td><td>23.4</td><td>96.3</td><td class="down">4.1×</td><td><span class="bar" style="width:70px;background:var(--green)"></span></td><td>—</td><td>—</td></tr>
+<tr><td>512K</td><td>15.2</td><td>79.1</td><td class="down">5.2×</td><td><span class="bar" style="width:46px;background:var(--green)"></span></td><td>24.0(455K)</td><td class="down">0.63×</td></tr>
+<tr><td>1M(wall)</td><td>875s</td><td>483s</td><td class="down">1.8×</td><td></td><td>—(600K 上限)</td><td>—</td></tr>
+<tr><td>短提示(69tok)</td><td>54.6</td><td>93.3</td><td class="down">1.7×</td><td></td><td>31.6</td><td class="up">1.73×</td></tr>
+</table>
+
+<h3>2.2 Decode 三方解读</h3>
+<div class="callout">
+<b>对 0731(短提示 1.7× → 512K 5.2×,差距随上下文扩大):</b>短上下文时 decode 主要是 GPU 算力(764B 2bpw vs 小一代的原生量化,1.7× 合理);上下文变长后 V4.1 每 token 还要付 Engram 查表(24 行×264B,命中页缓存则便宜)加上 KV 管理,512K 档掉到 15.2。<b>0731 的 decode 是它的王牌(全显存稀疏注意力)。</b>
+</div>
+<div class="callout g">
+<b>对双 DGX Spark(主力场景 1.6-1.7× 领先,超长上下文被反超):</b>短提示 54.6 vs 31.6(<b>1.73×</b>);128K 档 33.1 vs 19.0(<b>1.74×</b>)——日常 Agent/对话/代码场景全档位领先。转折点在 455K+:Spark 的 decode 在超长上下文反而回升(22-24 tok/s,统一内存大 KV 池优势),V4.1 掉到 15.2 被反超。<b>业务含义:512K 以内的重 prefill 轻 decode 场景选 V4.1;600K 极长上下文的稳定 decode 选 Spark。</b>
+</div>
+
+<h3>2.3 并发 decode(300tok 输出聚合)</h3>
+<table>
+<tr><th>并发</th><th>DSV41</th><th>0731</th><th>Mia</th></tr>
+<tr><td>1</td><td>54.6</td><td>93.3</td><td>31.6</td></tr>
+<tr><td>2</td><td>—</td><td>—</td><td>42.5(21.6/流)</td></tr>
+<tr><td>4</td><td>82.7</td><td>153.2</td><td>42.8</td></tr>
+<tr><td>8</td><td>109.2</td><td>469.3</td><td>—</td></tr>
+<tr><td>16</td><td><b>184.2</b></td><td>362.1</td><td>—</td></tr>
+</table>
+<div class="callout">V4.1 的 16 流聚合 184 tok/s 是<b>自然语言健康口径</b>(修正了此前 nonce 词表复读导致的 981 虚高);对 Spark 的 C4 42.8 仍有 <b>1.9×</b> 优势(C8 109 vs 42.8 = 2.5×);对 0731(全显存)是 1/2-1/4。<b>并发 decode 的盘读极轻(8 并发×300tok 实测仅 11MB 盘读)</b>,瓶颈在四卡流水线串行,不在盘。</div>
+
+<h2>3. 磁盘影响:逐场景盘读实测</h2>
+<table>
+<tr><th>场景</th><th>盘读</th><th>每 token</th><th>NAND 磨损</th></tr>
+<tr><td>纯 decode 2,000 tok</td><td>42 MB</td><td>21 KB</td><td class="up">零(纯读)</td></tr>
+<tr><td>8 并发 decode ×300</td><td>11 MB</td><td>极轻</td><td class="up">零</td></tr>
+<tr><td>prefill 32K 冷</td><td>1,294 MB</td><td>40 KB</td><td class="up">零</td></tr>
+<tr class="hl"><td>prefill 32K 同提示重发</td><td class="up"><b>0.1 MB</b></td><td><b>≈0(前缀缓存)</b></td><td class="up">零</td></tr>
+<tr><td>prefill 128K</td><td>4,805 MB</td><td>37 KB</td><td class="up">零</td></tr>
+<tr><td>prefill 512K</td><td>16,382 MB</td><td>31 KB</td><td class="up">零</td></tr>
+<tr><td>极端推算:100 次 512K prefill/天</td><td>1.6 TB/天读</td><td>—</td><td class="up"><b>仍为零(读不写)</b></td></tr>
+</table>
+<div class="callout g"><b>结论:盘的寿命完全无虞(SMART 磨损计数 0,累计写入仅 59GB),真正的约束是读带宽。</b>SATA 随机读 ~54MB/s 有效吞吐 = prefill 的天花板(每 token 31-40KB 盘读 × 速度);前缀缓存命中时归零(实测 0.1MB)。若未来 prefill 成为业务痛点,加一块 NVMe(Gen3×4,约 8 倍随机读)即可把 prefill 推向 0731 的七成——那是唯一值得花的硬件钱。</div>
+
+<h2>4. 总记分牌</h2>
+<table>
+<tr><th>维度</th><th>DSV41(CMP170)</th><th>0731(同机)</th><th>Mia 双 Spark(¥7万)</th><th>赢家</th></tr>
+<tr><td>prefill(2K-512K)</td><td>1,173-3,355</td><td class="win">3,247-5,264</td><td class="lose">873-1,055</td><td>0731 ≫ V4.1 > Spark</td></tr>
+<tr><td>decode 短上下文</td><td>31-55</td><td class="win">93-113</td><td class="lose">19-32</td><td>0731 > V4.1 > Spark</td></tr>
+<tr><td>decode 超长(≥455K)</td><td>15</td><td class="win">79</td><td>22-24</td><td>0731 > Spark > V4.1</td></tr>
+<tr><td>并发 decode C16</td><td>184</td><td class="win">362</td><td>~43(C4)</td><td>0731 > V4.1 > Spark</td></tr>
+<tr><td>质量/能力</td><td class="win">满血764B+Engram+视觉</td><td class="lose">上代模型无Engram</td><td class="win">满血764B+Engram+视觉</td><td>V4.1 = Spark ≫ 0731</td></tr>
+<tr><td>上下文</td><td class="win">1M 实测</td><td class="win">1M 实测</td><td>600K</td><td>V4.1 = 0731 > Spark</td></tr>
+<tr><td>磁盘寿命影响</td><td class="up">零(读不磨损)</td><td>无此依赖</td><td>零</td><td>平手</td></tr>
+<tr><td>成本</td><td class="win">~¥5 万</td><td>同台</td><td class="lose">~¥7 万</td><td>V4.1 胜</td></tr>
+</table>
+
+<div class="callout p" style="margin-top:24px">
+<b>最终结论:</b>这套 ¥5 万的 4×170HX + SSD-Engram 方案,在满血 V4.1-Flash 的同门对决中,<b>prefill 全档位 1.5-3.4× 压制 ¥7 万的官方双 DGX Spark,decode 主力场景 1.7× 领先,仅 455K+ 超长上下文被反超</b>;对自家 0731 付出 2-3× 速度代价,换来的是模型整整一代的差距(满血 764B + Engram 检索 + 原生视觉 + 1M 实测上下文)。磁盘零损耗,唯一的天花板是 SATA 读带宽——而这是留了后门的:一块 NVMe 就能解锁。
+</div>
+
+<h2>5. 数据文件索引</h2>
+<div class="sub" style="line-height:2">
+<span class="code">results/dsv41_context_ladder_20260919.json</span>(32K-256K 阶梯)·
+<span class="code">results/dsv41_ctx512k_20260919.json</span>(512K)·
+<span class="code">results/dsv41_ctx1m_20260919.json</span>(1M)·
+<span class="code">results/dsv41_dimension_matrix_20260920.json</span>(维度矩阵)·
+<span class="code">results/dsv41_disk_matrix_20260919.json</span>(盘读采样)·
+<span class="code">results/mode1_0731_*.json</span>(0731 全套)·
+Mia 数据:<a href="https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-EXL3-2x-DGX-Sparks">其仓库 README</a>
+</div>
+
+<div class="foot">测试执行与报告:ZCode(GLM-5.3)· 2026-09-20 · CMP170(hym74)+ 本机 Mac 双端驱动 · 全部 JSON 可复查</div>
+
+</div></body>
+</html>

@@ -1,0 +1,184 @@
+{
+  "baseUrl": "http://192.168.3.133:8000",
+  "model": "DeepSeek-V4-Flash-0731",
+  "targets": [
+    32768,
+    65536,
+    131072,
+    262144,
+    524288
+  ],
+  "rounds": 3,
+  "maxTokens": 192,
+  "profile": "temperature=0, ignore_eos=true, streaming usage, warmup discarded",
+  "abortedAfterError": false,
+  "warmupError": null,
+  "results": [
+    {
+      "targetContextTokens": 32768,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 32768,
+      "completionTokens": 192,
+      "ttftSeconds": 6.818,
+      "prefillTokensPerSecond": 4805.95,
+      "decodeTokensPerSecond": 87.62,
+      "wallSeconds": 8.998,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 32768,
+      "round": 2,
+      "maxTokens": 192,
+      "promptTokens": 32768,
+      "completionTokens": 192,
+      "ttftSeconds": 6.823,
+      "prefillTokensPerSecond": 4802.75,
+      "decodeTokensPerSecond": 80.27,
+      "wallSeconds": 9.202,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 32768,
+      "round": 3,
+      "maxTokens": 192,
+      "promptTokens": 32768,
+      "completionTokens": 192,
+      "ttftSeconds": 6.875,
+      "prefillTokensPerSecond": 4766.37,
+      "decodeTokensPerSecond": 89.14,
+      "wallSeconds": 9.018,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 65536,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 65536,
+      "completionTokens": 192,
+      "ttftSeconds": 13.642,
+      "prefillTokensPerSecond": 4804.07,
+      "decodeTokensPerSecond": 70.1,
+      "wallSeconds": 16.367,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 65536,
+      "round": 2,
+      "maxTokens": 192,
+      "promptTokens": 65536,
+      "completionTokens": 192,
+      "ttftSeconds": 13.546,
+      "prefillTokensPerSecond": 4838.13,
+      "decodeTokensPerSecond": 101.69,
+      "wallSeconds": 15.424,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 65536,
+      "round": 3,
+      "maxTokens": 192,
+      "promptTokens": 65536,
+      "completionTokens": 192,
+      "ttftSeconds": 13.676,
+      "prefillTokensPerSecond": 4792.21,
+      "decodeTokensPerSecond": 88.99,
+      "wallSeconds": 15.822,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 131072,
+      "round": 1,
+      "maxTokens": 192,
+      "promptTokens": 131072,
+      "completionTokens": 192,
+      "ttftSeconds": 29.058,
+      "prefillTokensPerSecond": 4510.64,
+      "decodeTokensPerSecond": 112.11,
+      "wallSeconds": 30.762,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 131072,
+      "round": 2,
+      "maxTokens": 192,
+      "promptTokens": 131072,
+      "completionTokens": 192,
+      "ttftSeconds": 29.185,
+      "prefillTokensPerSecond": 4491.09,
+      "decodeTokensPerSecond": 100.92,
+      "wallSeconds": 31.077,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 131072,
+      "round": 3,
+      "maxTokens": 192,
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "ttftSeconds": null,
+      "prefillTokensPerSecond": null,
+      "decodeTokensPerSecond": null,
+      "wallSeconds": 9.623,
+      "complete": false,
+      "validity": "PARTIAL"
+    },
+    {
+      "targetContextTokens": 262144,
+      "round": 1,
+      "maxTokens": 192,
+      "validity": "ERROR",
+      "error": "HTTPError: HTTP Error 500: Internal Server Error"
+    },
+    {
+      "targetContextTokens": 262144,
+      "round": 2,
+      "maxTokens": 192,
+      "validity": "ERROR",
+      "error": "HTTPError: HTTP Error 500: Internal Server Error"
+    },
+    {
+      "targetContextTokens": 262144,
+      "round": 3,
+      "maxTokens": 192,
+      "validity": "ERROR",
+      "error": "URLError: <urlopen error [Errno 61] Connection refused>"
+    },
+    {
+      "targetContextTokens": 524288,
+      "round": 1,
+      "maxTokens": 192,
+      "validity": "ERROR",
+      "error": "URLError: <urlopen error [Errno 61] Connection refused>"
+    },
+    {
+      "targetContextTokens": 524288,
+      "round": 2,
+      "maxTokens": 192,
+      "validity": "ERROR",
+      "error": "URLError: <urlopen error [Errno 61] Connection refused>"
+    },
+    {
+      "targetContextTokens": 524288,
+      "round": 3,
+      "maxTokens": 192,
+      "validity": "ERROR",
+      "error": "URLError: <urlopen error [Errno 61] Connection refused>"
+    }
+  ],
+  "telemetry": {
+    "samples": 0,
+    "maxTemperatureC": {},
+    "maxPowerW": {},
+    "maxUtilizationPct": {},
+    "maxMemoryMiB": {}
+  }
+}

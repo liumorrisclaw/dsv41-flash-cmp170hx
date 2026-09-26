@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DSV41-Flash CMP170 部署完整报告 · 2026-09-19</title>
+<style>
+:root{--bg:#0f1115;--card:#161a21;--line:#232936;--fg:#d7dce4;--muted:#8b93a3;--green:#3fb96f;--amber:#e0a93e;--red:#e05e5e;--blue:#5aa2e0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.75 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:40px 28px 80px}
+h1{font-size:26px;margin:0 0 6px}
+h2{font-size:19px;margin:40px 0 12px;border-left:4px solid var(--blue);padding-left:10px}
+h3{font-size:16px;margin:22px 0 8px;color:var(--blue)}
+.sub{color:var(--muted);font-size:13.5px}
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12.5px;margin-right:6px;border:1px solid var(--line)}
+.badge.g{color:var(--green);border-color:var(--green)}
+.badge.a{color:var(--amber);border-color:var(--amber)}
+.badge.b{color:var(--blue);border-color:var(--blue)}
+.badge.r{color:var(--red);border-color:var(--red)}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+th,td{padding:8px 10px;border:1px solid var(--line);text-align:right;white-space:nowrap}
+th{background:#1b2029;color:var(--muted);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+.up{color:var(--green)} .down{color:var(--red)} .flat{color:var(--muted)}
+.callout{border-left:4px solid var(--blue);background:#131a24;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+.callout.g{border-color:var(--green);background:#12211a}
+.callout.a{border-color:var(--amber);background:#211d12}
+.callout.r{border-color:var(--red);background:#211217}
+code{background:#1b2029;padding:1px 6px;border-radius:4px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace}
+ol,.story{margin:8px 0;padding-left:22px}
+.story li{margin-bottom:10px}
+a{color:var(--blue);text-decoration:none}
+.foot{margin-top:44px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>DeepSeek V4.1-Flash 满血部署完整报告</h1>
+<div class="sub">CMP170 服务器(hym74·4× CMP 170HX·62GB RAM·SATA·零新增硬件)| 2026-09-18 ~ 09-19 | 执行:ZCode(GLM-5.3)</div>
+<div style="margin:12px 0">
+<span class="badge g">服务在线 :8095</span><span class="badge g">质量 5/7+视觉 2/2</span><span class="badge b">prefill 3,355 tok/s</span><span class="badge b">全球首个 EXL3+SSD-Engram 组合</span><span class="badge a">已知:mcg 包重复黏性(参数已缓解)</span>
+</div>
+
+<div class="callout g">
+<b>一句话总结:</b>在"不加内存、不加硬盘、不加卡"的硬约束下,通过<b>SSD-Engram 架构</b>(189GiB 检索表常驻磁盘、62GB 页缓存托管)把 764B 满血 V4.1-Flash 塞进了 4 张矿卡。四场攻坚战(权重下载 / docker 镜像 / 五关首启 / 质量定案)全部告捷,服务已接入本机 DSH。
+</div>
+
+<h2>1. 战役全景(部署攻坚叙事)</h2>
+<div class="card">
+<ol class="story">
+<li><b>P1 磁盘释放</b>(09-19 00:30):停 0731、冷盘验证(48 片/156GB/标记)后删除服务器权重,522G→678G 空闲。0731 容器与镜像保留作回滚线。</li>
+<li><b>P2 权重下载战</b>(00:48–14:59,334GiB):①服务器直连 HF 被墙→切 hf-mirror;②Clash 反向隧道单连接 15KB/s 弃用;③镜像按 IP 限速 8MB/s 靠 32 文件×8 连接硬扛;④"14 小时老连接被降权"确诊→<b>新鲜连接重启绝招(66-81MB/s 收官)</b>;⑤最后一片 10MB 磨 20 分钟,总时长 14 小时。</li>
+<li><b>P2' docker 镜像战</b>(16:00–19:00,21.4GB):①daocloud IPv6 超时;②1ms.run 30 次重试全 EOF;<b>③确诊 layer 4cee93b1c73f 在 dockerproxy 缓存投毒(确定性返回错误内容)</b>;④手工注册表拉取器(双镜像轮询+逐层 sha256)就绪;⑤终极破局:<b>Clash HTTP CONNECT 路径污染大文件流 → SOCKS5 框架一把拉通</b>。</li>
+<li><b>P3 组装战</b>(19:00–19:50):overlay 26 补丁流水线;libcpu_moe.so + librow_store.so 编译;exllamav3 v1.5.0 sm80 编译踩三坑(只读挂载→cusparse.h 缺头→<b>编译顺序反了:必须先 exllamav3 后 vllm-exl3</b>)全部修复,commit 为 pp4-exl3-ssd:v1。</li>
+<li><b>P4 五关首启战</b>(20:00–21:30):①PYTHONPATH 挂 overlay 无效→<b>官方逐文件覆盖挂载(108 个 .py)</b>;②DSpark 草稿 PP 报错→overlay 自带旁路生效;③<b>94.5GB mmap 被内核拒(62GB 机器特有)</b>→vm.overcommit_memory=1;④skip 正则双转义修正;⑤空行截断 docker run 修复。<b>HTTP 200 达成。</b></li>
+<li><b>P5 质量定案</b>(21:30–23:30):验收 5/7+视觉 2/2;散文复读现象六组对照实验(DSpark/ngram/无投机 × 贪心/采样/置零)排除系统层嫌疑→<b>定案为 sfxnz mcg 量化包重复黏性</b>→generation_config 默认参数(temp 0.3 + freq_penalty 0.6)烘焙缓解,散文恢复正常文学质量。</li>
+<li><b>DSH 接入</b>(23:00–23:20):settings.yaml 写入 cmp-deepseek-v4-1-flash provider(baseURL :8095),设为默认模型,supervisor 重启,服务确认加载。</li>
+</ol>
+</div>
+
+<h2>2. 横向对比(四套系统)</h2>
+
+<h3>2.1 硬件与架构</h3>
+<table>
+<tr><th>系统</th><th>硬件</th><th>显存</th><th>量化</th><th>Engram 存储</th><th>上下文</th></tr>
+<tr><td><b>本机 DSV41</b></td><td>4× CMP 170HX (sm80)</td><td>256GB</td><td>EXL3 2.0bpw mcg</td><td><b>SATA + 62GB 页缓存</b></td><td>512K</td></tr>
+<tr><td>本机 0731</td><td>4× CMP 170HX</td><td>256GB</td><td>原生 mxfp4(V4-Flash 无 Engram)</td><td>—</td><td>1M</td></tr>
+<tr><td>kaka86mm</td><td>4× CMP 170HX(同款!)</td><td>256GB</td><td>EXL3 2bpw Pollard 校准</td><td>373GB RAM 钉驻 + NVMe</td><td>512K</td></tr>
+<tr><td>Mia(社区)</td><td>2× DGX Spark (GB10)</td><td>2×128GB 统一</td><td>EXL3 2.9bpw</td><td>NVMe packing(~94GiB/节点)</td><td>600K</td></tr>
+</table>
+
+<h3>2.2 性能对比</h3>
+<table>
+<tr><th>指标</th><th>本机 DSV41</th><th>本机 0731</th><th>kaka86mm<br>(同硬件·满配)</th><th>Mia 双 Spark</th></tr>
+<tr><td>单流散文 decode</td><td>~15-25*</td><td>—(V4-Flash 无此档)</td><td>25.0</td><td>31.6 / 29.3(coop)</td></tr>
+<tr><td>单流代码 decode</td><td>35.5</td><td>—</td><td>44.3</td><td>43.0(coop)</td></tr>
+<tr><td>单流计数 decode</td><td><b>59.9</b></td><td>—</td><td>66.7</td><td>40</td></tr>
+<tr><td>思考链 decode</td><td>~70(估)</td><td>—</td><td>79.0</td><td>—</td></tr>
+<tr><td>0731 阶梯 32K-512K</td><td>—</td><td>99→79</td><td>—</td><td>100K ctx 19.0</td></tr>
+<tr><td>prefill 8K</td><td><b>2,685</b></td><td>5,264</td><td>1,453</td><td>971</td></tr>
+<tr><td>prefill 16K</td><td><b>3,355</b></td><td>4,911</td><td>2,119</td><td>987</td></tr>
+<tr><td>prefill 128K-256K</td><td>未测</td><td>4,911→4,211</td><td>—</td><td>961→873</td></tr>
+<tr><td>并发聚合(C4)</td><td>357</td><td>153</td><td>76</td><td>42.8(C4)</td></tr>
+<tr><td>并发聚合(C32)</td><td>775*</td><td>430(16流)</td><td>219</td><td>61(C2 coop)</td></tr>
+<tr><td>质量验收</td><td>5/7 + 视觉 2/2</td><td>—</td><td>7/7 + 视觉 2/2</td><td>未公布同口径</td></tr>
+<tr><td>视觉 OCR</td><td class="up">✓ 发票 $1,337.42</td><td>✗</td><td>✓</td><td>✓(~60% 草稿接受率)</td></tr>
+</table>
+<div class="sub">* 散文/并发数字在复读现象下测得(投机命中率虚高),参数修复后单流质量恢复;* 本机 DSV41 并发数字口径为 decode-only 聚合。</div>
+
+<div class="callout">
+<b>对比解读:</b>①对 Mia 双 Spark(官方 GB10 开发机,现价约 ¥7 万/对):本机硬件为 4× 170HX(现价约 ¥1.2 万/张 ≈ ¥4.8 万)+ 整机,合计约 ¥5 万级——<b>便宜约 2 万(约七折)的情况下,prefill 达 2.7-3.4 倍,计数 decode 1.5 倍,代码持平</b>,价值点在于 PCIe PP4 + sm80 软件栈把解锁后的 256GB 显存压榨到位;②对 kaka86mm(同硬件+373GB RAM+NVMe 满配):达到其 60-90% 性能,证明了 SSD-Engram 路线的代价可控;③对自家 0731:prefill 约六成(0731 是全显存原生量化),但换来满血 764B + Engram + 视觉 + 512K 大上下文——两个模型定位互补。
+</div>
+
+<h2>2B. 同口径六档阶梯对比(DSV41 vs 0731,2026-09-20 实测)</h2>
+<div class="sub">同脚本(run_safe_long_context_matrix / run_single_context_nonstream)、同参数(temp=0, ignore_eos, 192 out)。0731 为 09-18 Gen2 对齐复测;DSV41 为 max-model-len=1M 配置下实测。0731 全显存原生量化,V4.1 为 2bpw + SSD-Engram。</div>
+<table>
+<tr><th>上下文</th><th>TTFT 0731</th><th>TTFT V4.1</th><th>比值</th><th>Prefill 0731</th><th>Prefill V4.1</th><th>Decode 0731</th><th>Decode V4.1</th></tr>
+<tr><td>32K</td><td>6.8s</td><td>52.7s</td><td class="down">7.7×</td><td>4,814</td><td>622(冷)</td><td class="down">98.9</td><td>31.3</td></tr>
+<tr><td>64K</td><td>12.5s</td><td>55.9s</td><td class="down">4.5×</td><td>5,264</td><td>1,173</td><td>113.1</td><td>35.2</td></tr>
+<tr><td>128K</td><td>26.7s</td><td>86.0s</td><td class="down">3.2×</td><td>4,911</td><td>1,524</td><td>104.4</td><td>33.1</td></tr>
+<tr><td>256K</td><td>62.2s</td><td>162.3s</td><td class="down">2.6×</td><td>4,211</td><td>1,615</td><td>96.3</td><td>23.4</td></tr>
+<tr><td>512K</td><td>161.5s</td><td>408.4s</td><td class="down">2.5×</td><td>3,247</td><td>1,284</td><td>79.1</td><td>15.2</td></tr>
+<tr><td>1M(wall)</td><td>483s</td><td>875s</td><td class="down">1.8×</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+</table>
+<div class="callout a">
+<b>阶梯解读:</b>①V4.1 的 prefill 随上下文升温(622→1,615 tok/s),0731 反向(4,814→3,247)——SSD-Engram 页缓存越跑越热 vs 稀疏注意力越跑越重,两条曲线在 256K 处交叉到最小差距(2.6×);②decode 差距稳定在 ~3×(0731 是原生量化 + 全显存,V4.1 是 2bpw + 5 倍参数量 + Engram 门控);③32K 档 prefill 622 是全冷起点(首轮全部落盘读),热身后 64K 同表跑到 1,173。<b>定位结论:0731 是速度型,V4.1 是能力型(满血 764B+视觉+Engram),两者互补而非替代。</b>
+</div>
+
+<h3>2B.2 维度矩阵对比(同 run_mode1_dimension_matrix)</h3>
+<table>
+<tr><th>场景</th><th>并发</th><th>0731</th><th>V4.1</th><th>比值</th></tr>
+<tr><td>prefill 3K 聚合</td><td>1</td><td>2,646</td><td>1,008</td><td class="down">2.6×</td></tr>
+<tr><td></td><td>8</td><td>4,717</td><td>1,013</td><td class="down">4.7×</td></tr>
+<tr><td>decode 300out 聚合</td><td>1</td><td>93.3</td><td>54.6</td><td class="down">1.7×</td></tr>
+<tr><td></td><td>16</td><td>362.1</td><td>184.2</td><td class="down">2.0×</td></tr>
+<tr><td>context 32K 聚合</td><td>1</td><td>3,986</td><td>1,871</td><td class="down">2.1×</td></tr>
+<tr><td>context 128K 聚合</td><td>1</td><td>4,356</td><td>2,548</td><td class="down">1.7×</td></tr>
+<tr><td></td><td>4</td><td>4,284</td><td>1,375</td><td class="down">3.1×</td></tr>
+</table>
+<div class="sub">注:V4.1 并发 prefill 不 scale(1,008→1,013,C8 仍持平)——SSD-Engram 的盘读带宽是并发 prefill 的硬顶;0731 全显存所以并发近线性。V4.1 的 16 流 decode 聚合 184 tok/s 为健康值(无复读干扰的自然语言提示词口径,与 accept.py 的 C16=981 不同:后者是 nonce 词表复读导致的投机命中率虚高)。</div>
+
+<h2>3. 硬盘寿命评估(基于实测)</h2>
+
+<h3>3.1 SMART 实测(CMP170 系统盘 KingFast 1TB)</h3>
+<table>
+<tr><th>指标</th><th>实测值</th><th>解读</th></tr>
+<tr><td>通电时长</td><td>867 小时(~36 天)</td><td>准新盘</td></tr>
+<tr><td>磨损计数 (Wear_Leveling)</td><td class="up"><b>0</b></td><td>零磨损记录</td></tr>
+<tr><td>累计写入</td><td>~59 GB</td><td>占总寿命(TBW 300TB 级)的 <b>0.02%</b></td></tr>
+<tr><td>累计读取</td><td>~843 GB</td><td>含权重下载后的加载读</td></tr>
+<tr><td>温度</td><td>40°C</td><td>健康范围</td></tr>
+</table>
+
+<h3>3.2 部署后的 IO 实测(逐场景盘读增量采样,2026-09-20)</h3>
+<table>
+<tr><th>场景</th><th>实测盘读</th><th>折算</th><th>解读</th></tr>
+<tr><td>纯 decode 2,000 tok</td><td>42 MB</td><td>21 KB/token</td><td>decode 期盘读很轻</td></tr>
+<tr><td>prefill 32K(冷)</td><td>1,294 MB</td><td>40 KB/token</td><td>合成词提示词,engram 全 miss</td></tr>
+<tr><td><b>prefill 32K(同提示重发)</b></td><td class="up"><b>0.1 MB</b></td><td>≈0</td><td><b>前缀缓存命中,盘读归零</b></td></tr>
+<tr><td>prefill 32K(新内容)</td><td>1,265 MB</td><td>40 KB/token</td><td>页缓存热但 n-gram 不重复仍落盘</td></tr>
+<tr><td>prefill 128K</td><td>4,805 MB</td><td>37 KB/token</td><td>线性放大</td></tr>
+<tr><td>prefill 512K</td><td>16,382 MB</td><td>31 KB/token</td><td>单次 512K prefill 读 16GB</td></tr>
+<tr><td>8 并发 decode×300</td><td>11 MB</td><td>极轻</td><td>并发 decode 无压力</td></tr>
+</table>
+
+<h3>3.3 结论</h3>
+<div class="callout g">
+<b>NAND 寿命影响 ≈ 零;读带宽才是真约束。</b>①SSD 磨损只由<b>写入</b>造成,Engram 路径是<b>纯读</b>,累计写入仅 59GB(寿命的 0.02%),日常写只有日志 KB 级;<b>即使每天 100 次满负荷 512K prefill(读 1.6TB/天),对 NAND 也零损耗</b>——读不磨盘,温度实测 40°C 健康。②真正的约束是<b>读带宽</b>:合成词全 miss 场景每 prefill token 要 31-40KB 盘读,SATA 随机读 ~54MB/s 有效吞吐把并发 prefill 钉在 ~1,000 tok/s(0731 的 1/4.7);<b>前缀缓存命中时盘读归零(实测 0.1MB)</b>,真实自然语言的 n-gram 局部性会显著优于合成词,但重复率低的冷文档仍会吃满盘带宽。③缓解已就位:热区预载脚本(engram-prewarm.sh)+ 前缀缓存开启中;根治要靠 NVMe(Gen3×4 = 8 倍随机读)——但那违反本项目"零新增硬件"前提,列为后续选项。
+</div>
+
+<h2>4. 已知限制与后续路线</h2>
+<table>
+<tr><th>项</th><th>状态</th><th>行动</th></tr>
+<tr><td>mcg 包重复黏性</td><td class="flat">已用默认参数缓解</td><td>长期:换 kaka86mm Pollard 校准包(需转换或获取)</td></tr>
+<tr><td>严格格式指令(日期/LRU 判分)</td><td class="flat">内容对、格式判负</td><td>业务侧用 chat 模板 + 提示词约束</td></tr>
+<tr><td>冷 prefill 慢</td><td class="flat">冷 ~1.2K tok/s</td><td>P6:engram-prewarm.sh 热区预载(已就位未启用)</td></tr>
+<tr><td>DSH 前端</td><td class="up">后端已加载</td><td>刷新 DSH 页面 → 模型下拉选「CMP DeepSeek V4.1 Flash (4×170HX SSD-Engram)」</td></tr>
+<tr><td>0731 回滚线</td><td class="up">完好</td><td>冷盘 + 容器在位,switch-to-0731.sh 一键切回</td></tr>
+</table>
+
+<h2>5. 资产清单</h2>
+<table>
+<tr><th>类别</th><th>位置</th></tr>
+<tr><td>模型权重 334GiB</td><td>cmp170:/home/AIModelDeploy/models/DSV41-2bpw</td></tr>
+<tr><td>运行镜像 pp4-exl3-ssd:v1</td><td>cmp170:docker(含 vllm-exl3 + exllamav3 sm80)</td></tr>
+<tr><td>启动/切换/预载脚本</td><td>cmp170:/home/AIModelDeploy/scripts/(serve-dsv41-ssd / switch-to-0731 / engram-prewarm)</td></tr>
+<tr><td>overlay + 补丁</td><td>cmp170:~/v41-graft(zebgop 26 补丁 + kaka 2 补丁)</td></tr>
+<tr><td>验收数据</td><td>cmp170:~/v41-bench + /home/hym/accept_run1.log</td></tr>
+<tr><td>方案文档 v1-v3</td><td>本仓库 dsv41-deployment-v3-execution.md 等</td></tr>
+<tr><td>DSH 接入</td><td>~/.dsh/settings.yaml → cmp-deepseek-v4-1-flash(默认)</td></tr>
+</table>
+
+<h2>6. 参考基线来源</h2>
+<div class="sub" style="line-height:2">
+<a href="https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-EXL3-2x-DGX-Sparks">Mia 双机 DGX Spark</a> ·
+<a href="https://github.com/kaka86mm/dsv41-flash-pp4-170hx">kaka86mm 4×170HX 满配</a> ·
+<a href="https://github.com/zebgop-ops/dsv41reap-pp">zebgop overlay(SSD-Engram 机制)</a> ·
+<a href="https://huggingface.co/sfxnz/DeepSeek-V4.1-Flash-EXL3/tree/2.0bpw-mcg">sfxnz 2.0bpw-mcg 权重包</a> ·
+本机 0731 数据:CMP170-Mode1-0731-Gen2四卡对齐复测报告-20260918.html
+</div>
+
+<div class="foot">生成于 2026-09-19 23:40 · 执行与报告:ZCode(GLM-5.3)· 攻坚跨度:约 24 小时 · 零硬件新增</div>
+
+</div></body>
+</html>

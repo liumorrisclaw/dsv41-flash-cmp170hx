@@ -1,0 +1,8 @@
+{
+  "targetContextTokens": 1047700,
+  "promptTokens": 1047701,
+  "completionTokens": 192,
+  "wallSeconds": 501.296,
+  "decodeTokensPerSecond": 0.38,
+  "validity": "PASS"
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "scenario": "decode_2ktok",
+    "read_MB": 42.0,
+    "wall_s": 36.7,
+    "out_tokens": 2000,
+    "note": "短提示长输出,decode主导"
+  },
+  {
+    "scenario": "prefill32k_cold",
+    "read_MB": 1294.4,
+    "wall_s": 17.9,
+    "out_tokens": 8,
+    "note": "首次"
+  },
+  {
+    "scenario": "prefill32k_warm_same",
+    "read_MB": 0.1,
+    "wall_s": 1.0,
+    "out_tokens": 8,
+    "note": "同提示重发,前缀缓存命中"
+  },
+  {
+    "scenario": "prefill32k_alt_seed",
+    "read_MB": 1264.6,
+    "wall_s": 17.8,
+    "out_tokens": 8,
+    "note": "新内容,页缓存热"
+  },
+  {
+    "scenario": "prefill128k",
+    "read_MB": 4804.6,
+    "wall_s": 64.7,
+    "out_tokens": 8,
+    "note": ""
+  },
+  {
+    "scenario": "prefill512k",
+    "read_MB": 16382.2,
+    "wall_s": 303.5,
+    "out_tokens": 8,
+    "note": ""
+  },
+  {
+    "scenario": "conc8x300",
+    "read_MB": 173.4,
+    "wall_s": 42.6,
+    "note": "8并发decode"
+  }
+]

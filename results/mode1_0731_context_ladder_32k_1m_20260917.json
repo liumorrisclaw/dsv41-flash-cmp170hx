@@ -1,0 +1,15 @@
+{
+  "baseUrl": "http://192.168.3.133:8000",
+  "model": "DeepSeek-V4-Flash-0731",
+  "startedAt": "2026-09-17T07:30:00+0800",
+  "profile": "Mode 1; 4x CMP170HX; PP4; max-model-len=1048576; temperature=0; ignore_eos=true; output=192; single stream; warmup discarded",
+  "results": [
+    {"targetContextTokens": 32768, "promptTokens": 32768, "completionTokens": 192, "ttftSeconds": 8.126, "prefillTokensPerSecond": 4032.24, "decodeTokensPerSecond": 49.43, "wallSeconds": 11.99, "validity": "PASS"},
+    {"targetContextTokens": 65536, "promptTokens": 65536, "completionTokens": 192, "ttftSeconds": 13.634, "prefillTokensPerSecond": 4806.81, "decodeTokensPerSecond": 96.85, "wallSeconds": 15.606, "validity": "PASS"},
+    {"targetContextTokens": 131072, "promptTokens": 131072, "completionTokens": 192, "ttftSeconds": 29.352, "prefillTokensPerSecond": 4465.47, "decodeTokensPerSecond": 113.60, "wallSeconds": 31.034, "validity": "PASS"},
+    {"targetContextTokens": 262144, "promptTokens": 262144, "completionTokens": 192, "ttftSeconds": 67.373, "prefillTokensPerSecond": 3890.93, "decodeTokensPerSecond": 116.93, "wallSeconds": 69.007, "validity": "PASS"},
+    {"targetContextTokens": 524288, "promptTokens": 524288, "completionTokens": 192, "ttftSeconds": 171.708, "prefillTokensPerSecond": 3053.38, "decodeTokensPerSecond": 82.48, "wallSeconds": 174.023, "validity": "PASS"},
+    {"targetContextTokens": 1047700, "promptTokens": 1047701, "completionTokens": 192, "wallSeconds": 501.296, "validity": "PASS", "measurementNote": "non-streaming clean-EOF补测；未提供TTFT/Prefill/Decode拆分"}
+  ],
+  "safety": {"serviceAfterTest": "running", "newXid": false, "newAER": false, "newOOM": false, "maxTemperatureC": 83}
+}

@@ -1,0 +1,198 @@
+{
+  "baseUrl": "http://192.168.3.133:8095",
+  "model": "deepseek-v4.1-flash",
+  "startedAt": "2026-09-20T00:19:14+0800",
+  "profile": "temperature=0, ignore_eos=true, warmup discarded; no technical/open-prose/code content benchmark",
+  "prefillConcurrency": [
+    {
+      "label": "prefill-3K",
+      "concurrency": 1,
+      "requested": 1,
+      "ok": 1,
+      "promptTokens": 3009,
+      "completionTokens": 1,
+      "wallSeconds": 2.984,
+      "aggregateTokensPerSecond": 0.34,
+      "aggregatePromptTokensPerSecond": 1008.22,
+      "errors": [],
+      "validity": "PASS"
+    },
+    {
+      "label": "prefill-3K",
+      "concurrency": 2,
+      "requested": 2,
+      "ok": 2,
+      "promptTokens": 6018,
+      "completionTokens": 2,
+      "wallSeconds": 5.799,
+      "aggregateTokensPerSecond": 0.34,
+      "aggregatePromptTokensPerSecond": 1037.69,
+      "errors": [],
+      "validity": "PASS"
+    },
+    {
+      "label": "prefill-3K",
+      "concurrency": 4,
+      "requested": 4,
+      "ok": 4,
+      "promptTokens": 12036,
+      "completionTokens": 4,
+      "wallSeconds": 11.798,
+      "aggregateTokensPerSecond": 0.34,
+      "aggregatePromptTokensPerSecond": 1020.16,
+      "errors": [],
+      "validity": "PASS"
+    },
+    {
+      "label": "prefill-3K",
+      "concurrency": 8,
+      "requested": 8,
+      "ok": 8,
+      "promptTokens": 24072,
+      "completionTokens": 8,
+      "wallSeconds": 23.775,
+      "aggregateTokensPerSecond": 0.34,
+      "aggregatePromptTokensPerSecond": 1012.5,
+      "errors": [],
+      "validity": "PASS"
+    }
+  ],
+  "decodeConcurrency": [
+    {
+      "label": "decode-60prompt-300output",
+      "concurrency": 1,
+      "requested": 1,
+      "ok": 1,
+      "promptTokens": 69,
+      "completionTokens": 300,
+      "wallSeconds": 5.499,
+      "aggregateTokensPerSecond": 54.55,
+      "aggregatePromptTokensPerSecond": 12.55,
+      "errors": [],
+      "validity": "PASS"
+    },
+    {
+      "label": "decode-60prompt-300output",
+      "concurrency": 4,
+      "requested": 4,
+      "ok": 4,
+      "promptTokens": 276,
+      "completionTokens": 1200,
+      "wallSeconds": 14.504,
+      "aggregateTokensPerSecond": 82.73,
+      "aggregatePromptTokensPerSecond": 19.03,
+      "errors": [],
+      "validity": "PASS"
+    },
+    {
+      "label": "decode-60prompt-300output",
+      "concurrency": 8,
+      "requested": 8,
+      "ok": 8,
+      "promptTokens": 552,
+      "completionTokens": 2400,
+      "wallSeconds": 21.974,
+      "aggregateTokensPerSecond": 109.22,
+      "aggregatePromptTokensPerSecond": 25.12,
+      "errors": [],
+      "validity": "PASS"
+    },
+    {
+      "label": "decode-60prompt-300output",
+      "concurrency": 16,
+      "requested": 16,
+      "ok": 16,
+      "promptTokens": 1104,
+      "completionTokens": 4800,
+      "wallSeconds": 26.057,
+      "aggregateTokensPerSecond": 184.21,
+      "aggregatePromptTokensPerSecond": 42.37,
+      "errors": [],
+      "validity": "PASS"
+    }
+  ],
+  "contextConcurrency": {
+    "32K": [
+      {
+        "label": "context-32K",
+        "concurrency": 1,
+        "requested": 1,
+        "ok": 1,
+        "promptTokens": 32009,
+        "completionTokens": 64,
+        "wallSeconds": 17.109,
+        "aggregateTokensPerSecond": 3.74,
+        "aggregatePromptTokensPerSecond": 1870.88,
+        "errors": [],
+        "validity": "PASS"
+      },
+      {
+        "label": "context-32K",
+        "concurrency": 2,
+        "requested": 2,
+        "ok": 2,
+        "promptTokens": 64018,
+        "completionTokens": 128,
+        "wallSeconds": 40.034,
+        "aggregateTokensPerSecond": 3.2,
+        "aggregatePromptTokensPerSecond": 1599.08,
+        "errors": [],
+        "validity": "PASS"
+      },
+      {
+        "label": "context-32K",
+        "concurrency": 4,
+        "requested": 4,
+        "ok": 4,
+        "promptTokens": 128036,
+        "completionTokens": 256,
+        "wallSeconds": 88.554,
+        "aggregateTokensPerSecond": 2.89,
+        "aggregatePromptTokensPerSecond": 1445.86,
+        "errors": [],
+        "validity": "PASS"
+      }
+    ],
+    "128K": [
+      {
+        "label": "context-128K",
+        "concurrency": 1,
+        "requested": 1,
+        "ok": 1,
+        "promptTokens": 128009,
+        "completionTokens": 64,
+        "wallSeconds": 50.244,
+        "aggregateTokensPerSecond": 1.27,
+        "aggregatePromptTokensPerSecond": 2547.73,
+        "errors": [],
+        "validity": "PASS"
+      },
+      {
+        "label": "context-128K",
+        "concurrency": 2,
+        "requested": 2,
+        "ok": 2,
+        "promptTokens": 256018,
+        "completionTokens": 128,
+        "wallSeconds": 117.699,
+        "aggregateTokensPerSecond": 1.09,
+        "aggregatePromptTokensPerSecond": 2175.2,
+        "errors": [],
+        "validity": "PASS"
+      },
+      {
+        "label": "context-128K",
+        "concurrency": 4,
+        "requested": 4,
+        "ok": 4,
+        "promptTokens": 512036,
+        "completionTokens": 256,
+        "wallSeconds": 372.281,
+        "aggregateTokensPerSecond": 0.69,
+        "aggregatePromptTokensPerSecond": 1375.4,
+        "errors": [],
+        "validity": "PASS"
+      }
+    ]
+  }
+}

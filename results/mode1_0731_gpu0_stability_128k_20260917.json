@@ -1,0 +1,60 @@
+{
+  "baseUrl": "http://192.168.3.133:8000",
+  "model": "DeepSeek-V4-Flash-0731",
+  "targets": [
+    131072
+  ],
+  "rounds": 3,
+  "maxTokens": 96,
+  "profile": "temperature=0, ignore_eos=true, streaming usage, warmup discarded",
+  "abortedAfterError": false,
+  "warmupError": null,
+  "results": [
+    {
+      "targetContextTokens": 131072,
+      "round": 1,
+      "maxTokens": 96,
+      "promptTokens": 131072,
+      "completionTokens": 96,
+      "ttftSeconds": 29.214,
+      "prefillTokensPerSecond": 4486.57,
+      "decodeTokensPerSecond": 96.28,
+      "wallSeconds": 30.201,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 131072,
+      "round": 2,
+      "maxTokens": 96,
+      "promptTokens": 131072,
+      "completionTokens": 96,
+      "ttftSeconds": 29.137,
+      "prefillTokensPerSecond": 4498.51,
+      "decodeTokensPerSecond": 95.11,
+      "wallSeconds": 30.136,
+      "complete": true,
+      "validity": "PASS"
+    },
+    {
+      "targetContextTokens": 131072,
+      "round": 3,
+      "maxTokens": 96,
+      "promptTokens": 131072,
+      "completionTokens": 96,
+      "ttftSeconds": 29.21,
+      "prefillTokensPerSecond": 4487.2,
+      "decodeTokensPerSecond": 74.08,
+      "wallSeconds": 30.493,
+      "complete": true,
+      "validity": "PASS"
+    }
+  ],
+  "telemetry": {
+    "samples": 0,
+    "maxTemperatureC": {},
+    "maxPowerW": {},
+    "maxUtilizationPct": {},
+    "maxMemoryMiB": {}
+  }
+}
