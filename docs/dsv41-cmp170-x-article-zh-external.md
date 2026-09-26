@@ -1,46 +1,60 @@
+![封面：约 763B 参数的完整 DeepSeek V4.1-Flash 部署组件包，经 EXL3 2.0 bpw 专家量化运行在 4× CMP 170HX；Full-size DeepSeek V4.1-Flash deployment bundle on four CMP 170HX GPUs](images/dsv41-x-article-cover-v2.png)
+
 # 1. 把满血 DeepSeek V4.1-Flash 跑在 4× CMP 170HX 上,不加内存不加盘
 
 一周多前的凌晨一点,health check 返回 200 的时候我盯着屏幕愣了几秒。之后这一周多,一直在用它跑实际负载、调优、踩坑。
 
-32K prefill 1,821 tok/s,decode 10-15 tok/s(作为参照:Mia 双机 DGX Spark prefill 1,055 tok/s @32K prompt,单流 prose decode 31.6 tok/s),原生视觉,1M 上下文实测通过。4 卡 170HX 赢在 prefill,输在最终 decode。因为 764B 参数。189GB Engram 检索表。跑在四张矿卡上,62GB 内存,一块 SATA 盘。
+32K 稳态 prefill 达到 1,821 tok/s；1M-token prompt 在本机实测通过。DSH Agent 场景的输出速度为 11.2–11.6 tok/s（这是完整 Agent 任务口径，不等同于下文的 decode-only benchmark）。系统用 4 张 CMP 170HX、62GB 主机内存和一块 SATA 盘，跑的是完整 V4.1-Flash 部署组件包。
+
+**先说明“满血 / full-size”的参数口径：** DeepSeek 官方报告的是 552B backbone + 196B Engram；完整本地推理组件还包括约 14B 的 DSpark 草稿器和约 0.5B 的视觉编码器，因此按这些已取整组件相加约 762.5B，简写约 763B。这不是 DeepSeek 官方单一的“总参数”标称值。原稿里的“764B”是混用不同清单和取整口径的粗略写法，为免误导，本文统一按约 763B 描述。这里的“满血”指没有换成蒸馏小模型、保留完整组件；**不代表原精度权重**：本部署包只把 routed experts 做 EXL3 2.0 bpw MCG 量化，其他张量保留来源 dtype，Engram 以 FP8 保留并放在 SSD 上按需读取。
+
+| 组件 | 约参数量 | 口径 |
+|---|---:|---|
+| Backbone | 552B | DeepSeek 官方报告值 |
+| Engram 检索表 | 196B | 官方报告的条件记忆参数量；两张大表合计约 189 GiB 存储 |
+| DSpark 草稿器 | 约 14B | 独立的多 token 草稿模块，不计入官方 552B backbone |
+| 视觉编码器 | 约 0.5B | 按公开模型配置 / 权重清单估算 |
+| 完整部署组件合计 | 约 762.5B，简写约 763B | 由上列近似值相加；不是单独的官方标称口径 |
+
+参数来源：[DeepSeek 技术报告与模型卡](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash)、[公开模型配置](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/raw/main/config.json)、[vLLM 对 DSpark 组件的说明](https://recipes.vllm.ai/deepseek-ai/DeepSeek-V4.1-Flash)、[EXL3 权重包的量化范围与来源 dtype 说明](https://huggingface.co/sfxnz/DeepSeek-V4.1-Flash-EXL3)。
 
 没有 NVMe。没有加内存条。没有换主板。
 
-为什么要做这件事？说实话，输出效率不会高——62GB 内存跑 764B 模型，Engram 查表走 SATA，prefill 和 decode 都会被硬件卡死。这不是一个追求性能的项目。
+为什么要做这件事？说实话，输出效率不会高——完整组件约 763B，但这不意味着所有参数都塞进 62GB 主机内存：backbone / 专家分布在 GPU，约 189GiB 的 Engram 表放在 SATA 上按需读取。性能会受 GPU、SATA 随机读和缓存共同约束。这不是一个追求峰值性能的项目。
 
-我真正想知道的是：**在硬件严重受限的条件下，有哪些优化思路可以撑起一个"不可能"的部署？** 189GB 的检索表能不能当数据库用而不是当权重加载？62GB 内存里的页缓存能不能扛住一个 189GB 表的查询压力？SATA 的随机读够不够喂一个 764B 的 Engram 门控？
+我真正想知道的是：**在硬件严重受限的条件下，有哪些优化思路可以撑起一个"不可能"的部署？** 约 189GiB 的检索表能不能当数据库用而不是整张加载？62GB 内存里的页缓存能不能扛住一个约 189GiB 表的查询压力？SATA 的随机读够不够支撑这个完整组件包里的 Engram 查表？
 
 为回答这些问题，部署中最关键的机制可以概括为下图：
 
-![SSD-Engram 技术示意图：四张 CMP 170HX、62GB 主机内存、SATA 上的 189GB Engram 表与三层缓存；Chinese-English technical diagram of the SSD-Engram lookup and cache design](images/dsv41-cmp170-architecture.png)
+![SSD-Engram 技术示意图：四张 CMP 170HX、62GB 主机内存、SATA 上约 190 GiB Engram 表与按需读取；Chinese-English technical diagram of SSD-Engram lookup and page-cache design](images/dsv41-cmp170-architecture-v2.png)
 
-*图：Engram 表保留在 SATA 上并按需读取；62GB 主机内存中约 40GB 用作 Linux 页缓存。自然语言 16K 预填充 ×3 的实测盘读从 3,840MB 降至 8MB（-99.8%）。 / Figure: The Engram table stays on SATA and is read on demand; about 40GB of the 62GB host memory serves as Linux page cache. In a measured 3× 16K natural-language prefill run, disk reads fell from 3,840MB to 8MB (-99.8%).*
+*图：Engram 表保留在 SATA 上并按需读取；62GB 主机内存中约 40GB 可由 Linux 页缓存使用。特定自然语言 16K×3 预填充测试的盘读从 3,840MB 降至 8MB（-99.8%），这是该测试集的实测结果，不代表所有提示词。 / Figure: The Engram table stays on SATA and is read on demand; about 40GB of host memory is available to Linux page cache. In one specific 3×16K natural-language prefill test, disk reads fell from 3,840MB to 8MB (-99.8%); this result is workload-specific.*
 
-这些问题没有现成答案——社区已有方案要么依赖 373GB 内存，要么依赖 NVMe，都跳过了硬件受限这个场景。我把整个过程和踩过的坑写出来，希望能给做类似优化的人多一些参考。
+在我对比的几条公开路线里，有的依赖约 373GB 主机内存，有的使用 NVMe；这篇记录的是另一种硬件约束下的实测尝试，并不声称此前没有类似 SSD-Engram 工作。我把过程和踩过的坑写出来，希望能给做类似优化的人多一些参考。
 
 假期抽空把整个测试报告整理了出来，以下是完整数据。
 
-# 2. 为什么这事以前没人做成
+# 2. 为什么我尝试把 Engram 放到 SSD
 
-V4.1-Flash 的 Engram 是个 189GB 的 n-gram 检索表——不是矩阵,不能量化,必须 FP8 原样放。kaka86mm 跑通了 4× 170HX,但他用了 373GB 内存把这张表钉死。Mia 的双 DGX Spark 用了 NVMe packing。
+V4.1-Flash 的 Engram 是挂在第 1 和第 14 层的两组大型 n-gram hash embedding 表，权重清单中合计约 189GiB（约 203GB 十进制；两片各约 94.5GiB）。它不是普通 MoE routed-expert 权重；当前 EXL3 包只量化 routed experts，Engram 仍保留来源 FP8 dtype，因此本方案不量化它，而是让它留在磁盘按需读取。kaka86mm 跑通了 4× 170HX，采用 373GB 级别的主机内存把表驻留；Mia 的双 DGX Spark 使用 NVMe packing。
 
-我的机器:62GB 内存,SATA 盘随机读 50MB/s。Engram 表比内存大三倍。
+我的机器：62GB 主机内存，SATA 随机读约 50MB/s。Engram 文件约为主机内存的 3 倍。
 
-以前所有人都把这张表当成"必须完整加载"的东西。但其实它是个查找表——每 token 只需要查 ~24 行,每次 264 字节。
+它本质上是查找表，不必把整个表常驻内存。配置包含两个 Engram 层（第 1、14 层）；每层有 8 个 hash head、覆盖 2/3/4-gram，理论上每 token 最多约 24 个候选行查找。当前 row-store 路径中单行约 264B；这只是逻辑行数据量，实际磁盘读取还受页粒度、缓存命中和并发影响。
 
 # 3. 主流方案对比与思路来源
 
 在定方案之前,我把社区已有的几条路线过了一遍:
 
-**路线 A:kaka86mm 的 373GB 内存钉表方案。** 同款 4× 170HX,质量 7/7,速度最稳。但硬性要求宿主 RAM ≥373GB(Engram 钉 189GiB + 余量),我的 62GB 差了 6 倍。参考价值:证明了 170HX 能跑 EXL3 2bpw,benchmark 套件可直接复用。
+**路线 A：[kaka86mm 的 373GB 内存钉表方案](https://github.com/kaka86mm/dsv41-flash-pp4-170hx)。** 同款 4× 170HX，公开记录质量测试 7/7，速度最稳；其配置需要约 373GB 主机 RAM（约 189GiB Engram 加运行余量），我的机器只有 62GB。参考价值：证明了 170HX 能跑 EXL3 2bpw，benchmark 套件可参考复用。
 
-**路线 B:Mia 双 DGX Spark 的 NVMe packing 方案。** Engram 按节点拆成 ~94GiB 打进 NVMe,用 `posix_fadvise` 预热。核心洞察:**Engram 是查找表,不需要完整加载,按需 pread 即可**。但他的机器有 NVMe(随机读 ~400MB/s),我的 SATA 只有 ~50MB/s。
+**路线 B：[Mia 双 DGX Spark 的 NVMe packing 方案](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-EXL3-2x-DGX-Sparks)。** Engram 按节点拆成约 94GiB 放到 NVMe，用 `posix_fadvise` 预热。核心洞察：**Engram 是查找表，不必完整加载，可按需 `pread`**。其公开配置使用 NVMe；其吞吐数据与我的 SATA 实测不是同一机器、同一测试条件，以下只作方案背景，不当作严格硬件对照。
 
-**路线 C:zebgop-ops 的 SSD-Engram overlay。** 在 dsv41reap-pp 仓库里实现了完整的 `DSV41_ENGRAM_STORAGE=ssd` 模式:GPU 算哈希 → CUDA 宿主回调 → 线程池 pread 直读 safetensors → 页缓存当 LRU → 设备端反量化。他的测试机器 123GB RAM + NVMe。
+**路线 C：[zebgop-ops 的 SSD-Engram overlay](https://github.com/zebgop-ops/dsv41reap-pp)。** 仓库实现了 `DSV41_ENGRAM_STORAGE=ssd` 模式：GPU 算哈希 → CUDA 宿主回调 → 线程池 `pread` 读取 safetensors → 页缓存 → 设备端反量化。其测试机器为 123GB RAM + NVMe。
 
-**路线 D:PCIe 电容模组 + EPYC 平台。** 硬件路线,24 焊点/卡 + 换主板。能解决 ×16 带宽但不解决 Engram 存储问题,投入 ¥2 万+。
+**路线 D：硬件改造。** 例如 PCIe 链路改造或更换 EPYC 平台；具体焊接和成本依设备而异。它可能改善卡间带宽，但不解决 Engram 表的存储容量问题，因此本次没有采用。
 
-我的方案 = **路线 B 的核心思想(Engram 按需查表,不加载)+ 路线 C 的现成实现(SSD 模式开关)+ 路线 A 的权重包和 benchmark**。赌的是:62GB 内存里腾出 40GB 做页缓存,n-gram 的 Zipf 分布能让大部分查询命中,冷查询的 SATA 带宽够 decode 用(prefill 慢但 decode 快)。
+我的方案 = **路线 B 的核心思想（Engram 按需查表，不整表载入）+ 路线 C 的现成实现（SSD 模式开关）+ 路线 A 的权重包和 benchmark**。初始假设是：62GB 内存中腾出约 40GB 给页缓存，重复访问的行能受益于 LRU；实际命中率取决于访问分布，需要按真实 row-store 统计验证，不能仅凭 Zipf 分布推断“文件头就是热区”。
 
 # 4. 实际部署(9月18日晚间)
 
@@ -50,50 +64,49 @@ V4.1-Flash 的 Engram 是个 189GB 的 n-gram 检索表——不是矩阵,不能
 
 **第一关，overlay 挂载。** zebgop 的 overlay 有 54 个 .py 文件，覆盖了 vLLM 的注意力、Engram、DSpark、权重加载器等核心模块。最初我尝试用 PYTHONPATH 让 Python 优先加载 overlay 目录——结果只对顶层包生效，vLLM 内部的子模块导入（`from vllm.models.deepseek_v4_1.common.engram import ...`）仍然指向镜像内的原版文件。解法是逐文件 bind-mount：遍历 overlay/vllm/ 下的每一个 .py，分别 mount 到镜像内 vllm 包的对应路径上（共 108 个文件）。这样 Python 的 import 机制天然命中 overlay 版本，零侵入。
 
-**第二关，94.5GB mmap 被内核拒绝。** Engram 表太大，vLLM 的权重加载器用 `mmap` 惰性映射 safetensors 文件。62GB 内存的机器，默认 `vm.overcommit_memory=0`（启发式模式）下，内核发现 94.5GB 的映射接近物理内存的 150% 直接拒绝。`vm.overcommit_memory=1`（总是允许）解决——但这也意味着如果真的同时触碰所有页就会 OOM。实际上 Engram 的查询是稀疏的（每 token 只触 ~24 行），配合后面的 SKIP_WEIGHT_RE 跳过加载，实际触碰量极小。这是 62GB 机器的独有坑，zebgop 的 123GB 机器从没遇到过。
+**第二关，94.5GiB mmap 被内核拒绝。** Engram 表太大，vLLM 的权重加载器用 `mmap` 惰性映射 safetensors 文件。在这台 62GB 主机上，默认 `vm.overcommit_memory=0` 时，我们遇到映射失败；将其设为 `1`（总是允许）后通过。这个设置只放宽虚拟内存承诺，不会增加物理 RAM；若进程实际触碰过多页面仍可能 OOM。Engram 查询是稀疏的，配合后面的跳过加载机制，本部署只按需读取页面。该故障是本机复现结果，不推广为所有 62GB 主机都会遇到的必然行为。
 
-**第三关，Engram 跳过正则。** 即使 mmap 允许了，也不该真的把 189GB 表读进内存。overlay 提供了 `DSV41_SKIP_WEIGHT_RE` 环境变量——一个正则，匹配到的权重名会被加载器在 open 文件之前就跳过。正确值是 `layers\.(1|14)\.engram\.embed\.`（Engram 只挂在第 1 和第 14 层）。这个正则在 shell 嵌套里转义写错了三次才搞对。
+**第三关，Engram 跳过正则。** 即使 mmap 允许了，也不应真的把约 189GiB 表全部读入内存。overlay 提供 `DSV41_SKIP_WEIGHT_RE` 环境变量；匹配到的 Engram 权重会在加载路径中跳过，由 SSD row-store 按需服务。正确值是 `layers\.(1|14)\.engram\.embed\.`（Engram 只挂在第 1 和第 14 层）。这个正则在 shell 嵌套里转义写错了三次才搞对。
 
 **第四关，DSpark 草稿模型不支持 PP4。** vLLM 原版对 speculative decoding + pipeline parallelism 的组合有硬编码检查（要求草稿模型实现 SupportsPP 接口），而 DSpark 的草稿不是流水线化的——它整体住在最后一个 rank 上。overlay 的 speculative.py 补丁加了一段旁路：当 method=dspark 且 pipeline_parallel_size>1 时，强制把 draft_parallel_config.pipeline_parallel_size 设为 1。这段代码必须通过逐文件挂载才能生效。
 
 ## 减少磁盘读取
 
-189GB 检索表在 SATA 上，随机读 ~50MB/s，这是整个方案最大的性能瓶颈。三层缓存体系来扛：
+约 189GiB 的检索表在 SATA 上，随机读约 50MB/s，这是整个方案最大的性能瓶颈。以下三种机制共同减少重复 I/O：
 
-**第一层：前缀缓存。** vLLM 自带的 prefix caching，同提示词重发时盘读从 1.3GB 降到 0.1MB（-99.9%）。这是免费的——vLLM 把已见过的 KV 块按 block hash 索引，相同前缀直接复用，不需要重新 prefill 也就不需要重新查 Engram。
+**第一层：前缀缓存。** vLLM 自带的 prefix caching；在同提示词重发的本机测试中，盘读从约 1.3GB 降到 0.1MB（约 -99.99%）。这是该重复前缀场景的结果：已缓存的 KV 块可直接复用，避免重复 prefill 和对应的 Engram 查询；新前缀不会获得同样收益。
 
-**第二层：Linux 页缓存。** 62GB 内存里 ~40GB 交给内核自动管理。关键洞察：n-gram 的 Zipf 分布意味着高频行集中在哈希表的头部区域，页缓存的 LRU 淘汰策略天然把最热的页留在内存里。不需要任何手动干预，内核自己就把最常用的 Engram 行缓存住了。稳态下 decode 期盘读几乎为零（2000 tok 生成只读了 42MB，其中大部分是一次性的冷行）。
+**第二层：Linux 页缓存。** 62GB 内存中约 40GB 可由内核用于页缓存。LRU 会优先保留近期重复访问的页面；但 hash table 的逻辑热度不等于文件偏移靠前，不能假设表头天然最热。一次 2,000-token decode 测试仍读了 42MB（约 21KB/token），所以“缓存命中”不等于零磁盘 I/O。
 
-**第三层：静态热区预载。** 页缓存的问题是冷启动——刚开机时缓存是空的，前几个长文档的 prefill 会大量落盘。解法是开机后把分片头部 30GB 顺序读一遍灌进页缓存（engram-prewarm.sh，约 4 分钟）。依据是自然语言的 n-gram 频率分布高度偏向头部（Zipf定律：排名第 k 的 n-gram 出现频率约为第 1 名的 1/k），头部 30GB 大约覆盖了 80%+ 的常见查询。实测效果：自然语言 16K×3 prefill 的盘读从 3,840MB 降到 8MB（-99.8%），32K prefill 从全冷的 622 tok/s 升到稳态的 1,821 tok/s。
+**第三层：静态预读。** 冷启动时页缓存为空，前几个长文档可能产生更多落盘读取。我们的 `engram-prewarm.sh` 会顺序读取分片起始约 30GB（约 4 分钟）作为工程性预热；由于 hash 行的物理位置未必按热度排序，这不证明“头部覆盖 80% 热查询”。本次自然语言 16K×3 测试中，预热前后盘读从 3,840MB 降至 8MB（-99.8%）；另一组 32K 测试从冷态 622 tok/s 提升至稳态 1,821 tok/s。这些是所测提示词与缓存状态下的结果，不代表普遍命中率。
 
-**自适应守护进程（正在运行）。** 每 60 秒检测盘读活动，有查询就自动 fadvise(WILLNEED) 头部 15GB×2 分片，防止 LRU 把热页冲出去。后续计划用 row_store_stats() 积累真实命中分布（哪些行号被读最多），定向预载最热页，比"猜头部"更精准。
+**自适应守护进程（正在运行）。** 每 60 秒检测盘读活动；检测到读取后，对两个分片各自的起始约 15GB 调用 `fadvise(WILLNEED)`。这仍是顺序预读启发式，并非基于实时行命中率的热页定位。后续计划用 `row_store_stats()` 积累真实命中分布，再评估是否能定向预载最热页。
 
-三层叠加后，自然语言场景的 Engram 查询几乎全部命中页缓存，SATA 的随机读带宽不再是 decode 的瓶颈——prefill 仍然受限（每 token 31-40KB 盘读），但这可以通过热区预载扩大覆盖来缓解。如果把 SATA 换成一块 NVMe（Gen3×4，随机读约 8 倍），prefill 预计从 ~1,800 提升到 ~4,000 tok/s（接近 0731 的全显存水平），同时保留 SSD-Engram 的零内存占用优势。
+这些机制在已测自然语言负载中显著减少了重复读取，但冷提示词仍可能受 SATA 限制。本机冷 prefill 的观测值约为每 token 31–40KB 磁盘读取；decode 测试也并非零读。换用 Gen3×4 NVMe 后从约 1,800 提升至约 4,000 tok/s 是按带宽比例作的粗略外推，不是实测承诺；SSD-Engram 也不是“零内存占用”，而是避免把整张 Engram 表常驻主机 RAM。
 
 # 5. 实测数据(9月19日~20日)
 
-验收 5/7 质量 + 2/2 视觉(计数 400/400 全对,发票 OCR 精确到 $1,337.42)。
+本机验收小套件：质量任务 5/7 通过，视觉用例 2/2（其中计数 400/400、发票 OCR 读出 $1,337.42）。这是有限的本地 smoke test，不是标准化综合能力评测，也不能据此断言普遍的模型质量排名。
 
 **prefill 逐档:**
 
-| 上下文 | DSV41 稳态 | 双 DGX Spark | 自家 0731 |
+| Prompt 长度 | DSV41 稳态 prefill (tok/s) | 双 DGX Spark (tok/s) | 自家 0731 (tok/s) |
 |---|---|---|---|
 | 16K | 3,355 | 987 | 4,911 |
 | 32K | 1,821 | 1,055 | 4,814 |
 | 128K | 2,548 | 961 | 4,911 |
 | 256K | 1,615 | 873 | 4,211 |
 | 512K | 1,284 | ~850 | 3,247 |
-| 1M wall | 875s | —(600K 上限) | 483s |
 
 **decode:**
 
-| 场景 | DSV41 | 双 Spark | 0731 |
+| 工作负载 | DSV41 (tok/s) | 双 Spark (tok/s) | 0731 (tok/s) |
 |---|---|---|---|
 | 短提示 | 54.6 | 31.6 | 93.3 |
-| 128K | 33.1 | 19.0 | 104.4 |
+| 长上下文（DSV41 128K / Spark 100K） | 33.1 | 19.0 | 104.4 |
 | 计数 | 59.9 | 40 | — |
 
-prefill 全档位压双 Spark(1.5-3.4×),decode 主力场景 1.7× 领先。对 0731 付出 2-3× 速度代价,换满血 764B + Engram + 视觉 + 1M——模型整整一代。
+1M prompt prefill 的本机单次墙钟时间为 875s；同机 0731 记录为 483s。Mia 的公开测试约到 600K，因此没有 1M 对照。Mia 的公开测试来自双 DGX Spark、不同量化（EXL3 2.9bpw）和公开 harness，本机为 4× CMP 170HX、EXL3 2.0bpw；这些数字适合做方向性参考，不是严格同机 A/B。按记录的点位，本机稳态 prefill 比 Mia 对应公开值快约 1.5–3.4×；短提示 decode 约 1.7×，长上下文参考点（DSV41 128K / Mia 100K）约 1.7×。相较 0731，本机多数 decode 点位较慢，prefill 也低于全显存基线；换来的是 V4.1-Flash 的完整组件、Engram、原生视觉和实测 1M prompt 能力。性能数字不构成模型质量优劣结论。
 
 **DSH 实测**(DeepSeek Harness,真实 Agent 环境):
 
@@ -104,19 +117,19 @@ prefill 全档位压双 Spark(1.5-3.4×),decode 主力场景 1.7× 领先。对 
 | 代码生成(500tok) | 11.5 | 3 轮均值 | length |
 | 长回复(800tok) | 11.2 | 3 轮均值 | length |
 
-四场景稳定在 **11.2-11.6 tok/s**(标准差 <0.3),工具调用正确触发并正常收尾。DSpark 投机草稿接受率 70-90%,前缀缓存命中率 44-59%。26 轮 API 调用无 OOM,无 Xid。Agent 层的循环问题通过 repetition_penalty 1.1 缓解(根因是 2bpw mcg 包的指令遵循精度)。
+四场景均值在 **11.2–11.6 tok/s**（每场景 3 轮，标准差 <0.3），工具调用正确触发并正常收尾。表中的 `finish=length` 表示该轮达到输出 token 上限，不等于模型自然结束。该小样本结果受提示词、生成参数和 2.0bpw MCG 量化影响，不代表一般任务质量。DSpark 草稿接受率在这些测试中为 70–90%，前缀缓存命中率为 44–59%；26 轮 API 调用无 OOM、无 Xid。Agent 层的循环问题通过 `repetition_penalty=1.1` 缓解；这是一项部署侧缓解措施，不能把量化对指令遵循的影响归结为唯一根因。
 
-磁盘:SMART 磨损计数 0,写入仅 59GB(0.02% 寿命)。Engram 路径纯读,零 NAND 磨损。
+磁盘：本次记录的 SMART 磨损计数为 0、累计主机写入约 59GB；Engram row-store 路径为只读，因此该路径本身不产生 NAND 写入。实际寿命仍取决于盘型、额定写入量和其他系统写入。
 
 # 6. 下一步:测试 GLM-5.3-Flash(假期继续)
 
-同一台机器,同样的 SSD-Engram 架构,下一个目标是 GLM-5.3-Flash。Mia 已经在双 DGX Spark 上跑通了 GLM 5.3 Flash EXL3(单流 40 tok/s,C4 78 tok/s),GLM-5.3 用 DeepSeek 同款稀疏注意力架构,理论上同样可以走这条路。
+同一台机器、同样的 SSD-Engram 思路，下一个目标是 GLM-5.3-Flash。Mia 有公开的双 DGX Spark EXL3 部署和多组 decode 数据；不同 prompt 类型、并发数和优化开关会给出不同速度，因此这里不摘录单一数字，后续以其 [公开仓库](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks) 的具体 benchmark 口径为准。GLM-5.3-Flash 采用 KDA 线性注意力与 DeepSeek-style sparse attention 混合的不同架构，并非与 DeepSeek V4.1 相同的注意力栈；SSD offload 是否适用仍需针对其模型结构和实现单独验证（[SGLang 架构说明](https://github.com/sgl-project/sglang/blob/main/docs/cookbook/autoregressive/GLM/GLM-5.3-Flash.mdx)）。
 
-社区也有人整理了 GLM-5.3-Flash 在 4× CMP 170HX 上的部署配方:[Morrowmake/glm53-flash-cmp170hx-recipe](https://github.com/Morrowmake/glm53-flash-cmp170hx-recipe) — 后续实测后会跟 DSV41 的数据做一轮横向对比,看两个模型在同套硬件上各自的定位。
+社区也有人整理了 GLM-5.3-Flash 在 4× CMP 170HX 上的部署配方：[Morrowmake/glm53-flash-cmp170hx-recipe](https://github.com/Morrowmake/glm53-flash-cmp170hx-recipe)。后续实测后再与 DSV41 做同机、同口径横向比较。
 
 # 7. 致谢与开源
 
-**Zhipu AI（智谱）· GLM-5.3** — 全程使用 GLM-5.3 完成整个部署的可行性评估、技术方案整理和最终流程打通。花了一个周的配额。虽然近期有些负面消息，希望尽快推出更强更好的前沿模型。
+**Zhipu AI（智谱）· GLM-5.3** — 全程使用 GLM-5.3 完成部署可行性评估、技术方案整理和最终流程打通，消耗了约一周的使用额度。
 
 [zebgop-ops/dsv41reap-pp](https://github.com/zebgop-ops/dsv41reap-pp) — SSD-Engram 机制与完整 vLLM overlay
 
