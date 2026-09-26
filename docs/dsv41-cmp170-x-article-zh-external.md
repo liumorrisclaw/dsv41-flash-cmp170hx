@@ -2,11 +2,9 @@
 
 一周多前的凌晨一点,health check 返回 200 的时候我盯着屏幕愣了几秒。之后这一周多,一直在用它跑实际负载、调优、踩坑。
 
-764B 参数。189GB Engram 检索表。跑在四张矿卡上,62GB 内存,一块 SATA 盘。
+32K prefill 1,821 tok/s,decode 10-15 tok/s(作为参照:Mia 双机 DGX Spark prefill 1,055 tok/s @32K prompt,单流 prose decode 31.6 tok/s),原生视觉,1M 上下文实测通过。4 卡 170HX 赢在 prefill,输在最终 decode。因为 764B 参数。189GB Engram 检索表。跑在四张矿卡上,62GB 内存,一块 SATA 盘。
 
 没有 NVMe。没有加内存条。没有换主板。
-
-prefill 3,355 tok/s(nonce 口径),原生视觉,1M 上下文实测通过。作为参照:Mia 最新双机 DGX Spark(需要 2 台,约 ¥7 万)跑同一个模型——prefill 1,055 tok/s(32K prompt),单流 prose decode 31.6 tok/s,峰值 54 tok/s(×4 流、关投机),上下文 600K。同口径 32K prefill 我们是 1,821 tok/s(1.7×),但单流 prose decode 只有 10-15 tok/s(Spark 31.6,差 2-3×,SATA 查表的代价),这是诚实的差距,不是标题党。
 
 为什么要做这件事？说实话，输出效率不会高——62GB 内存跑 764B 模型，Engram 查表走 SATA，prefill 和 decode 都会被硬件卡死。这不是一个追求性能的项目。
 
