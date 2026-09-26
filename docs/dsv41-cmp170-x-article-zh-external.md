@@ -12,38 +12,11 @@ prefill 3,355 tok/s,decode 35.5 tok/s,原生视觉,1M 上下文实测通过。�
 
 我真正想知道的是：**在硬件严重受限的条件下，有哪些优化思路可以撑起一个"不可能"的部署？** 189GB 的检索表能不能当数据库用而不是当权重加载？62GB 内存里的页缓存能不能扛住一个 189GB 表的查询压力？SATA 的随机读够不够喂一个 764B 的 Engram 门控？
 
-这些问题的答案贯穿了整个部署过程，工作流如下：
+为回答这些问题，部署中最关键的机制可以概括为下图：
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    DSV41 部署工作流                           │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  [调研] 社区方案对比                                          │
-│    ├── kaka86mm: EXL3 2bpw + 373GB RAM 钉表  ──┐             │
-│    ├── zebgop: SSD-Engram + 123GB RAM + NVMe ──┤             │
-│    ├── Mia 双 Spark: NVMe packing + 600K ctx ──┤             │
-│    └── 0xSero: row_store.cpp 原型 ─────────────┘             │
-│         ↓                                                    │
-│  [决策] SSD-Engram 零硬件方案                                │
-│    ├── sfxnz EXL3 2.0bpw 权重包 (334GB)                      │
-│    ├── zebgop overlay + DSV41_ENGRAM_STORAGE=ssd             │
-│    └── 62GB 页缓存当 LRU ← 替代 373GB 钉内存                 │
-│         ↓                                                    │
-│  [准备] 磁盘释放 → 权重下载(334GB/14h) → 镜像(21GB)      │
-│         ↓                                                    │
-│  [组装] overlay 26 补丁 → exllamav3 + vllm-exl3 编译       │
-│         → librow_store.so + libcpu_moe.so                    │
-│         ↓                                                    │
-│  [首启] 五关: 挂载/PP旁路/mmap/正则/续行符                  │
-│         ↓                                                    │
-│  [验证] 质量 5/7 + 视觉 2/2 + 六档阶梯 + 1M PASS            │
-│         ↓                                                    │
-│  [优化] 磁盘三层缓存 → prefill 盘读 -99.8%                  │
-│         → DSH 接入 → Agent 循环缓解                          │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
+![SSD-Engram 技术示意图：四张 CMP 170HX、62GB 主机内存、SATA 上的 189GB Engram 表与三层缓存；Chinese-English technical diagram of the SSD-Engram lookup and cache design](images/dsv41-cmp170-architecture.png)
+
+*图：Engram 表保留在 SATA 上并按需读取；62GB 主机内存中约 40GB 用作 Linux 页缓存。自然语言 16K 预填充 ×3 的实测盘读从 3,840MB 降至 8MB（-99.8%）。 / Figure: The Engram table stays on SATA and is read on demand; about 40GB of the 62GB host memory serves as Linux page cache. In a measured 3× 16K natural-language prefill run, disk reads fell from 3,840MB to 8MB (-99.8%).*
 
 这些问题没有现成答案——社区已有方案要么依赖 373GB 内存，要么依赖 NVMe，都跳过了硬件受限这个场景。我把整个过程和踩过的坑写出来，希望能给做类似优化的人多一些参考。
 
