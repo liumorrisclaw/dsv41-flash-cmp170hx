@@ -6,7 +6,7 @@
 
 没有 NVMe。没有加内存条。没有换主板。
 
-prefill 3,355 tok/s,decode 35.5 tok/s,原生视觉,1M 上下文实测通过。
+prefill 3,355 tok/s,decode 35.5 tok/s,原生视觉,1M 上下文实测通过。作为参照:Mia 最新双机 DGX Spark（约 ¥7 万）跑同一个模型，prefill 987 tok/s，单流 prose decode 31.6 tok/s。
 
 为什么要做这件事？说实话，输出效率不会高——62GB 内存跑 764B 模型，Engram 查表走 SATA，prefill 和 decode 都会被硬件卡死。这不是一个追求性能的项目。
 
